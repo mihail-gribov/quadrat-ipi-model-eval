@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+
+# your own sweeps: plain jsonl written by matrix.py. The published sweeps are the .gz files.
+data/episodes-*.jsonl
+data/calls-*.jsonl
+data/probe_*.jsonl

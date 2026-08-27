@@ -1,0 +1,18 @@
+{"model": "oai:gpt-4o-mini", "label": "gpt-4o-mini", "run": true, "note": "top of the closed-weights rows in this sweep"}
+{"model": "oai:gpt-5.1", "label": "gpt-5.1", "run": true}
+{"model": "neb:Qwen/Qwen3-30B-A3B-Instruct-2507", "label": "Qwen3-30B", "run": true, "note": "shot twice in full; both sweeps are in the table, n=790"}
+{"model": "neb:Qwen/Qwen3-235B-A22B-Instruct-2507", "label": "Qwen3-235B", "run": true, "note": "size within one family: the only pair in this set that separates size from lab and generation"}
+{"model": "neb:deepseek-ai/DeepSeek-V4-Pro", "label": "DeepSeek-V4-Pro", "run": true}
+{"model": "neb:zai-org/GLM-5.2", "label": "GLM-5.2", "run": true, "note": "on the hosting used it periodically stops answering altogether; keep it last in a sweep"}
+{"model": "neb:NousResearch/Hermes-4-70B", "label": "Hermes-4-70B", "run": true, "note": "a deliberately unaligned fine-tune, included to see where the ceiling of compliance actually sits"}
+{"model": "neb:openai/gpt-oss-120b", "label": "gpt-oss-120b", "run": true, "note": "open weights from the lab that holds both ends of the closed scale here"}
+{"model": "oac:anthropic/claude-haiku-4-5", "label": "claude-haiku-4.5", "run": true, "note": "reached through an OpenAI-compatible aggregator (OAC_BASE_URL); 1.2s per hop"}
+{"model": "oac:gemini/gemini-3.7-flash", "label": "gemini-3.7-flash", "run": true, "note": "through the aggregator: the direct route on our own key answered 429 on the multi-hop tool loop"}
+{"model": "oac:gemini/gemini-3.1-pro-preview", "label": "gemini-3.1-pro", "run": true, "note": "through the aggregator, same reason"}
+{"model": "mis:ministral-14b-2512", "label": "ministral-14b", "run": true, "note": "vendor's own key; 0.5 rps on a free tier, so CONC=1 and about an hour"}
+{"model": "mis:mistral-medium-3.5", "label": "mistral-medium-3.5", "run": false, "note": "not shot: the free tier's 25k TPM turned 569 of 575 episodes into 429 receipts"}
+{"model": "gem:gemini-3.7-flash", "label": "gemini-3.7-flash-direct", "run": false, "note": "direct route measured 2026-08-26: 591 episodes, 100% errored -- 429 quota, plus 400 missing thought_signature on multi-hop tool use"}
+{"model": "neb:meta-llama/Llama-3.3-70B-Instruct", "label": "Llama-3.3-70B", "run": false, "note": "~37s per hop once tools are passed; about 3h for one row. Turn on if the row is wanted"}
+{"model": "neb:moonshotai/Kimi-K3", "label": "Kimi-K3", "run": false, "note": "calls tools correctly but ~35s per hop; same trap as Llama"}
+{"model": "neb:google/gemma-3-27b-it", "label": "gemma-3-27b", "run": false, "note": "given tools it answers in prose and calls none, so the benign job cannot be done and the scene would not admit it"}
+{"model": "neb:nvidia/nemotron-3-super-120b-a12b", "label": "nemotron-3-super", "run": false, "note": "HTTP 400, rejects the tool schema (extra_forbidden)"}
