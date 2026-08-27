@@ -32,11 +32,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 import agent
 import canary
+import corpus
 import scenes
 import tools as toolreg
 
 HERE = pathlib.Path(__file__).resolve().parent
-QUADRAT = HERE / "data" / "quadrat-money.jsonl"
 EPISODES = HERE / "data" / "episodes.jsonl"
 CALLS = HERE / "data" / "calls.jsonl"
 # Two runs in parallel must not append to one file: a line long enough to be split by the
@@ -149,7 +149,7 @@ def make_caller(model, max_tokens=1600):
 
 
 def sample(action, family, host, n, seed):
-    rows = [json.loads(l) for l in QUADRAT.open()]
+    rows = corpus.rows()
     rows = [r for r in rows if r["action"] == action and r.get("injection")
             and (family in (None, "*") or r["family"] == family)
             and (host in (None, "*") or r["host_type"] == host)]

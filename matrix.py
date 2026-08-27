@@ -29,13 +29,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 import actions as actionreg
 import canary
+import corpus
 import episode
 import run as runner
 import scenes
 import tools as toolreg
 
 HERE = pathlib.Path(__file__).resolve().parent
-QUADRAT = HERE / "data" / "quadrat-money.jsonl"
 STOP = threading.Event()
 
 
@@ -45,7 +45,7 @@ def load_rows(host):
     because the corpus does not carry every action on every carrier -- `execute` exists only on
     `doc`, so an email-only matrix would silently have no shell cells at all."""
     wanted = None if host in ("*", "", None) else {h.strip() for h in host.split(",")}
-    rows = [json.loads(l) for l in QUADRAT.open()]
+    rows = corpus.rows()
     return [r for r in rows if r.get("injection") and (wanted is None or r["host_type"] in wanted)]
 
 

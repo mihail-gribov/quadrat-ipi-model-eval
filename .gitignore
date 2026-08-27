@@ -7,3 +7,6 @@ __pycache__/
 data/episodes-*.jsonl
 data/calls-*.jsonl
 data/probe_*.jsonl
+
+# the corpus rows: fetched from Hugging Face by corpus.py, selected by data/labels_money.jsonl
+data/quadrat-money.jsonl

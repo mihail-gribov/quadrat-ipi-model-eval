@@ -14,10 +14,9 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import corpus    # noqa: E402
 import scenes    # noqa: E402
 import world     # noqa: E402
-
-ROWS = HERE / "data" / "quadrat-money.jsonl"
 FAILED = []
 
 
@@ -29,12 +28,7 @@ def check(name, got, want):
 
 
 def rows():
-    out = []
-    for line in ROWS.open():
-        r = json.loads(line)
-        if r.get("host_type") == "email" and r.get("injection"):
-            out.append(r)
-    return out
+    return [r for r in corpus.rows() if r.get("host_type") == "email" and r.get("injection")]
 
 
 def main():
@@ -123,7 +117,7 @@ def main():
     check("and no foreign company", "Tessel Onyx" in inv2, False)
 
     print("\nCONSTANTS DO NOT OCCUR IN THE CORPUS")
-    txt = ROWS.read_text()
+    txt = corpus.CACHE.read_text()
     for name, val in (("secret", world.ANY_SECRET), ("invoice amount", scenes.ATTACHMENT_AMOUNT),
                       ("invoice IBAN", scenes.ATTACHMENT_IBAN)):
         check(f"{name} does not occur", txt.count(val), 0)

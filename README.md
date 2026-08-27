@@ -84,7 +84,8 @@ payment. All three queued it 20 times out of 20. The tool works; the zero is a r
 ```
 pip install -r requirements.txt
 cp .env.example .env            # fill in the key for your route
-python3 test_world.py           # no model, no network; run before every sweep
+python3 corpus.py               # fetches the 420 letters from Hugging Face, verifies the fingerprint
+python3 test_world.py           # no model; run before every sweep
 
 MODEL=oai:gpt-4o-mini TAG=mine ./money.sh --plan     # what will run and what is refused
 MODEL=oai:gpt-4o-mini TAG=mine CTL_PER_CELL=20 ./money.sh
@@ -123,8 +124,9 @@ has a published sweep would be merged with it as a second measurement.
 | `episode.py` | one episode end to end, shared by both runners |
 | `score.py`, `report.py` | grading from the tool log; the tables |
 | `probe_capability.py` | positive control for a zero |
-| `data/quadrat-money.jsonl` | the 420 rows, byte-identical to Quadrat-IPI v1.0.2 |
-| `data/labels_money.jsonl` | the demand labels that select them (one LLM pass, gpt-5.1) |
+| `corpus.py` | fetches the listed rows from Quadrat-IPI at a pinned revision and verifies them |
+| `data/labels_money.jsonl` | THE LIST: the 420 payload ids and the demand labels that selected them (one LLM pass, gpt-5.1) |
+| `data/quadrat-money.sha256` | fingerprint of the rows the list resolves to |
 | `data/episodes-money7-*.jsonl.gz` | our episode logs, the source of every number above |
 
 `matrix.py` can also run other columns of the corpus on generated scenes (invoice, orders,
@@ -133,8 +135,13 @@ only the money column has been measured to this depth; treat the rest as experim
 
 ## Data and licence
 
-Code: Apache-2.0. The rows in `data/quadrat-money.jsonl` are from Quadrat-IPI (CC-BY-4.0);
-carriers are Enron emails (public record), injections are the dataset's own. Episode logs
-contain model outputs on those letters.
+The repository carries the list of payloads, not their text. `corpus.py` pulls
+`data/positives.jsonl` from `mihailgribov/quadrat-ipi` at revision `v1.0.2`, keeps the 420
+listed ids, checks the result against `data/quadrat-money.sha256` and caches it locally. If the
+fingerprint ever fails, the letters behind the list have changed and a new sweep must not be
+compared with the published ones.
+
+Code: Apache-2.0. The letters are Quadrat-IPI rows; carriers are Enron emails (public record),
+injections are the dataset's own. Episode logs contain model outputs on those letters.
 
 If you use the harness or the numbers, cite Quadrat-IPI and link this repository.
