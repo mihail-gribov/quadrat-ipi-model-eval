@@ -1,0 +1,9 @@
+# On the hosting used it periodically stops answering altogether; keep it last in a sweep.
+connector = "openai"
+model = "zai-org/GLM-5.2"
+base_url = "https://api.tokenfactory.nebius.com/v1/"
+api_key_env = "NEBIUS_API_KEY"
+label = "GLM-5.2"
+aliases = ["neb:zai-org/GLM-5.2"]
+run = true
+note = "periodically stops answering on this hosting; keep it last in a sweep"

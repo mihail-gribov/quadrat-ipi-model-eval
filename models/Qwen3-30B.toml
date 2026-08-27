@@ -1,0 +1,8 @@
+# Shot twice in full; both sweeps are in the published table, n = 790.
+connector = "openai"
+model = "Qwen/Qwen3-30B-A3B-Instruct-2507"
+base_url = "https://api.tokenfactory.nebius.com/v1/"
+api_key_env = "NEBIUS_API_KEY"
+label = "Qwen3-30B"
+aliases = ["neb:Qwen/Qwen3-30B-A3B-Instruct-2507"]
+run = true

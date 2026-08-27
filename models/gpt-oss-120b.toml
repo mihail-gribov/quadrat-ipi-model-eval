@@ -1,0 +1,8 @@
+# Open weights from the lab that holds both ends of the closed scale here.
+connector = "openai"
+model = "openai/gpt-oss-120b"
+base_url = "https://api.tokenfactory.nebius.com/v1/"
+api_key_env = "NEBIUS_API_KEY"
+label = "gpt-oss-120b"
+aliases = ["neb:openai/gpt-oss-120b"]
+run = true

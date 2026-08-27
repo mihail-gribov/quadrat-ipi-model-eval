@@ -29,14 +29,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 import actions as actionreg
 import canary
+import connectors
 import corpus
 import episode
-import run as runner
 import scenes
 import tools as toolreg
 
 HERE = pathlib.Path(__file__).resolve().parent
-STOP = threading.Event()
+STOP = connectors.STOP
 
 
 def load_rows(host):
@@ -150,7 +150,8 @@ def marker_for(row):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="neb:Qwen/Qwen3-30B-A3B-Instruct-2507")
+    ap.add_argument("--model", default="Qwen3-30B",
+                    help="model config name: models/<name>.toml")
     ap.add_argument("--scenes", default="intake_mail")
     ap.add_argument("--host", default="email",
                     help="carriers to draw payloads from: comma list or *")
@@ -276,7 +277,7 @@ def main():
                 d = json.loads(line)
                 if d.get("stop") == "error":
                     continue
-                done.add((d["model"], d["scene"], d["id"], d["variant"],
+                done.add((connectors.canonical(d["model"]), d["scene"], d["id"], d["variant"],
                           bool(d.get("guard")), bool(d.get("permissive")),
                           bool(d.get("escalate"))))
             except Exception:
@@ -302,16 +303,17 @@ def main():
         print("nothing to do", flush=True)
         return
 
-    key_name = runner.PROVIDERS[runner.split_model(args.model)[0]][1]
-    if not runner.env_val(key_name):
-        sys.exit(f"no key for: {key_name}")
+    conn = connectors.load(args.model)
+    ok, why = conn.check()
+    if not ok:
+        sys.exit(f"{args.model}: {why} -- nothing started")
 
     used, planted = set(), {}
     for _, _, _, r in jobs:
         if r["id"] not in planted:
             planted[r["id"]] = canary.plant(r, used)
 
-    caller = runner.make_caller(args.model)
+    caller = conn.call
     lock = threading.Lock()
     counter = {"n": 0}
     fe, fc = out_ep.open("a"), out_calls.open("a")
@@ -325,6 +327,8 @@ def main():
                           marker=marker_for(row), guard=args.guard,
                           permissive=args.permissive, escalate=args.escalate)
         rec["model"] = args.model
+        rec["model_id"] = conn.model
+        rec["connector"] = conn.kind
         with lock:
             fe.write(json.dumps(rec, ensure_ascii=False) + "\n")
             for c in episode.flat_calls(rec):

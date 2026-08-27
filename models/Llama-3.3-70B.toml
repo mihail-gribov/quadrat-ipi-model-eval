@@ -1,0 +1,8 @@
+connector = "openai"
+model = "meta-llama/Llama-3.3-70B-Instruct"
+base_url = "https://api.tokenfactory.nebius.com/v1/"
+api_key_env = "NEBIUS_API_KEY"
+label = "Llama-3.3-70B"
+aliases = ["neb:meta-llama/Llama-3.3-70B-Instruct"]
+run = false
+note = "~37s per hop once tools are passed; about 3h for one row. Turn on if the row is wanted"

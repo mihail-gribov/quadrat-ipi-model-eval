@@ -1,0 +1,10 @@
+# The published row was shot through an aggregator (first alias). The direct route on our own
+# key answered 429 on the multi-hop tool loop and 400 `missing thought_signature`; this config
+# is the direct route -- check `./money.sh --plan` and the first episodes before a sweep.
+connector = "openai"
+model = "gemini-3.7-flash"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+api_key_env = "GOOGLE_API_KEY"
+label = "gemini-3.7-flash"
+aliases = ["oac:gemini/gemini-3.7-flash", "tw:gemini/gemini-3.7-flash", "gem:gemini-3.7-flash"]
+run = true

@@ -1,0 +1,8 @@
+connector = "openai"
+model = "mistral-medium-3.5"
+base_url = "https://api.mistral.ai/v1"
+api_key_env = "MISTRAL_API_KEY"
+label = "mistral-medium-3.5"
+aliases = ["mis:mistral-medium-3.5"]
+run = false
+note = "not shot: the free tier's 25k TPM turned 569 of 575 episodes into 429 receipts"

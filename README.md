@@ -83,20 +83,39 @@ payment. All three queued it 20 times out of 20. The tool works; the zero is a r
 
 ```
 pip install -r requirements.txt
-cp .env.example .env            # fill in the key for your route
+cp .env.example .env            # fill in the key your model config names
 python3 corpus.py               # fetches the 420 letters from Hugging Face, verifies the fingerprint
 python3 test_world.py           # no model; run before every sweep
+python3 connectors.py list      # every model config, and whether its key is present
 
-MODEL=oai:gpt-4o-mini TAG=mine ./money.sh --plan     # what will run and what is refused
-MODEL=oai:gpt-4o-mini TAG=mine CTL_PER_CELL=20 ./money.sh
+MODEL=gpt-4o-mini TAG=mine ./money.sh --plan     # what will run and what is refused
+MODEL=gpt-4o-mini TAG=mine CTL_PER_CELL=20 ./money.sh
 python3 report.py --only money --tag 'money7*,mine'   # your row next to ours
 ```
 
-Routes are a prefix on the model id: `oai:` OpenAI, `neb:` Nebius, `gem:` Google's
-OpenAI-compatible surface, `mis:` Mistral, and `oac:` for any other OpenAI-compatible endpoint -
-an aggregator, or a vLLM / TGI / llama.cpp server on your own machine (`OAC_BASE_URL`,
-`OAC_API_KEY`). Everything goes through one client, one tool protocol and one retry path, so a
-row differs from another by the model and by nothing else.
+A model is a config file, `models/<name>.toml`, and a run names the config:
+
+```toml
+connector = "openai"                  # openai | anthropic | ollama
+model = "gpt-4o-mini"                 # the id the endpoint knows
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"        # the key lives in .env, never here
+label = "gpt-4o-mini"                 # what the tables print
+run = true                            # money_all.sh sweeps every config with run = true
+```
+
+One class per wire format (`connectors.py`): `openai` is chat completions with tools and
+covers every OpenAI-compatible endpoint - OpenAI, Nebius, Mistral, Google's compatibility
+surface, an aggregator, or a vLLM / TGI / llama.cpp / LM Studio server on your own machine
+(`models/local-vllm.toml`); `anthropic` is the Messages API through the vendor's SDK;
+`ollama` is Ollama's native API for a local model (`models/local-ollama.toml`, where `num_ctx`
+can be set - the OpenAI shim leaves it at a default too small for the 19-tool manifest).
+Optional keys: `max_tokens`, `temperature` (omit to send none - the newest models reject
+it), `timeout`, `reasoning = true` for OpenAI reasoning models, `base_url_env` when the URL is
+private, `aliases` for ids older logs used, and an `[extra]` table merged into every request
+as-is (`thinking`, `output_config`, `reasoning_effort`, ...). Everything goes through one tool
+protocol and one retry path, so a row differs from another by the config and by nothing else.
+Episodes record the config name as `model`, plus `model_id` and `connector`.
 
 A model without native tool calling can run with `--protocol json`: it answers with a JSON list
 of calls and sees the results as a user turn. Same manifest, same grading. Pass it through
@@ -107,18 +126,21 @@ under 300k output tokens per model on the models above (`usage` is recorded on e
 Ctrl-C stops at an episode boundary; running again continues. `CTL_PER_CELL=20` gives the 180
 controls the published rows have.
 
-Use a fresh `TAG` for your sweep. `report.py` groups by model id, so a model id that already
-has a published sweep would be merged with it as a second measurement.
+Use a fresh `TAG` for your sweep. `report.py` groups by config name (with `aliases` folded
+in), so re-running a config that already has a published sweep merges the two as two
+measurements of one model - which is what happened to Qwen3-30B in the table.
 
 ## Files
 
 | file | role |
 |---|---|
-| `money.sh`, `money_all.sh` | the money run for one model / for every model in `models.jsonl` |
+| `money.sh`, `money_all.sh` | the money run for one model config / for every config in `models/` with `run = true` |
+| `connectors.py`, `models/*.toml` | how a model is reached: one class per wire format, one config per model |
 | `matrix.py` | the driver: admission, planning, resume, the episode loop |
 | `scenes.py` | the scene: system prompt, manifest, the benign job and its check |
 | `world.py`, `tools.py` | the emulated tools and their schemas |
 | `agent.py` | the tool-calling loop, native and JSON protocols |
+| `test_world.py`, `test_connectors.py` | the world without a model; the connectors without a network |
 | `canary.py`, `fakegen.py` | canary values planted into payload slots so a hit can be proved |
 | `actions.py` | what each action demands and which rows are unverifiable |
 | `episode.py` | one episode end to end, shared by both runners |

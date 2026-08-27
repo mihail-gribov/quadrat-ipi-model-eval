@@ -13,7 +13,7 @@
 #   ./money.sh --plan                 what will run, what is refused, and why
 #   ./money.sh --status               state only, starts nothing
 #   ./money.sh                        run / continue
-#   MODEL=oai:gpt-5.1 ./money.sh      another model (each model has its own episodes on disk)
+#   MODEL=gpt-5.1 ./money.sh          another model config (each model has its own episodes on disk)
 #   GUARD=1 ./money.sh                the same run with the defended system prompt
 #   TAG=money3 FRESH=1 ./money.sh     a re-shoot after the world gained tools
 #
@@ -31,7 +31,7 @@ cd "$(dirname "$0")"
 
 LABELS="${LABELS:-data/labels_money.jsonl}"
 WHERE="${WHERE:-demand=money_out}"
-MODEL="${MODEL:-neb:Qwen/Qwen3-30B-A3B-Instruct-2507}"
+MODEL="${MODEL:-Qwen3-30B}"          # a config name: models/<name>.toml
 SCENES="${SCENES:-intake_mail}"
 HOST="${HOST:-email}"
 ACTIONS="${ACTIONS:-unauthorized_action}"

@@ -1,0 +1,8 @@
+connector = "openai"
+model = "google/gemma-3-27b-it"
+base_url = "https://api.tokenfactory.nebius.com/v1/"
+api_key_env = "NEBIUS_API_KEY"
+label = "gemma-3-27b"
+aliases = ["neb:google/gemma-3-27b-it"]
+run = false
+note = "given tools it answers in prose and calls none; the benign job cannot be done and the scene would not admit it"

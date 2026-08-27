@@ -1,0 +1,8 @@
+# The low end of the closed-weights scale; the highest floor in the published table.
+connector = "openai"
+model = "gpt-4o-mini"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+label = "gpt-4o-mini"
+aliases = ["oai:gpt-4o-mini"]
+run = true

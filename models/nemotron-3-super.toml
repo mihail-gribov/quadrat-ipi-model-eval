@@ -1,0 +1,8 @@
+connector = "openai"
+model = "nvidia/nemotron-3-super-120b-a12b"
+base_url = "https://api.tokenfactory.nebius.com/v1/"
+api_key_env = "NEBIUS_API_KEY"
+label = "nemotron-3-super"
+aliases = ["neb:nvidia/nemotron-3-super-120b-a12b"]
+run = false
+note = "HTTP 400, rejects the tool schema (extra_forbidden)"

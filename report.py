@@ -22,14 +22,13 @@ import actions          # noqa: E402
 import scenes           # noqa: E402
 import score as sc      # noqa: E402
 
-LABELS = {}
-for line in (HERE / "models.jsonl").open():
-    d = json.loads(line)
-    LABELS[d["model"]] = d["label"]
+import connectors       # noqa: E402
+
+LABELS = connectors.labels()
 
 
 def nice(model):
-    """The name a reader knows, not the routing id: `oac:anthropic/claude-haiku-4-5` is noise."""
+    """The label from the model config, not the config name or an old routing id."""
     guard = model.endswith(" +guard")
     base = model[:-7] if guard else model
     return LABELS.get(base, base.split("/")[-1]) + (" +guard" if guard else "")

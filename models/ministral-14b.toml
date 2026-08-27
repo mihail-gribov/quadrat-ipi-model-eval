@@ -1,0 +1,9 @@
+# Vendor's own key; 0.5 rps on a free tier, so CONC=1 and about an hour.
+connector = "openai"
+model = "ministral-14b-2512"
+base_url = "https://api.mistral.ai/v1"
+api_key_env = "MISTRAL_API_KEY"
+label = "ministral-14b"
+aliases = ["mis:ministral-14b-2512"]
+run = true
+note = "free tier: CONC=1"

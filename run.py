@@ -20,18 +20,17 @@ Re-running skips episodes already on disk, so a stopped run continues where it l
 
 import argparse
 import json
-import os
 import pathlib
 import random
 import signal
 import sys
 import threading
-import time
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
 import agent
 import canary
+import connectors
 import corpus
 import scenes
 import tools as toolreg
@@ -44,108 +43,9 @@ CALLS = HERE / "data" / "calls.jsonl"
 # each run its own pair; scoring reads them all back with a glob.
 ALL_EPISODES = sorted((HERE / "data").glob("episodes*.jsonl"))
 
-DEFAULT_MODELS = ["neb:Qwen/Qwen3-30B-A3B-Instruct-2507"]
+DEFAULT_MODELS = ["Qwen3-30B"]
 DEFAULT_SCENES = ["invoice", "orders", "travel"]
-
-PROVIDERS = {
-    "neb": ("https://api.tokenfactory.nebius.com/v1/", "NEBIUS_API_KEY"),
-    "oai": ("https://api.openai.com/v1", "OPENAI_API_KEY"),
-    # Google's OpenAI-compatible surface. Reached this way rather than through their own SDK so
-    # that one caller, one tool protocol and one retry path serve every model in the bench: a
-    # number that differs by the client library is not a number about the model.
-    "gem": ("https://generativelanguage.googleapis.com/v1beta/openai/", "GOOGLE_API_KEY"),
-    # Any other OpenAI-compatible endpoint: an aggregator, a vLLM/TGI/llama.cpp server on your
-    # own machine, a model with a custom adapter behind a thin HTTP layer. The base URL comes from
-    # the environment (`OAC_BASE_URL`) rather than being pinned here. This is the only reason a
-    # third-party route can be used at all: the tool loop stays identical, so a row still differs
-    # by the model and by nothing else. The published Claude and Gemini rows were shot this way.
-    "oac": (None, "OAC_API_KEY"),
-    # Mistral's own endpoint, same OpenAI-compatible chat/tools surface as the rest.
-    "mis": ("https://api.mistral.ai/v1", "MISTRAL_API_KEY"),
-}
-ENV_FILE = HERE / ".env"
-STOP = threading.Event()
-
-
-def env_val(key):
-    v = os.environ.get(key)
-    if v:
-        return v
-    if ENV_FILE.exists():
-        for line in ENV_FILE.read_text().splitlines():
-            if line.startswith(key + "="):
-                return line.split("=", 1)[1].strip()
-    return None
-
-
-def split_model(name):
-    prefix, _, ident = name.partition(":")
-    if prefix not in PROVIDERS:
-        prefix, ident = "neb", name
-    return prefix, ident
-
-
-def _create_with_backoff(cl, kw, waits=(2, 4, 8, 16, 32, 60)):
-    """One chat completion, waited out through throttling and provider hiccups.
-
-    The client's own two retries span a few seconds, which is nothing against a per-second
-    rate limit hit from eight workers: the Mistral free tier turned 569 of 575 episodes into
-    429 receipts in one sweep. A throttled call is not a measurement of the model, so it is
-    waited out here and only given up on after ~two minutes, at which point the episode is
-    recorded as `stop=error` and re-shot by the next run as before.
-    """
-    import openai
-    for i, wait in enumerate(waits):
-        try:
-            return cl.chat.completions.create(**kw)
-        except (openai.RateLimitError, openai.APIConnectionError, openai.InternalServerError):
-            if STOP.is_set():
-                raise
-            time.sleep(wait)
-    return cl.chat.completions.create(**kw)
-
-
-def make_caller(model, max_tokens=1600):
-    """One OpenAI-compatible call; returns {"content":..., "tool_calls":[...]} either way."""
-    from openai import OpenAI
-    prefix, ident = split_model(model)
-    base, key_name = PROVIDERS[prefix]
-    if base is None:                       # generic route: the endpoint is configured, not pinned
-        base = env_val("OAC_BASE_URL")
-        if not base:
-            sys.exit("oac: models need OAC_BASE_URL (and OAC_API_KEY) in the environment or .env")
-    cl = OpenAI(base_url=base, api_key=env_val(key_name), timeout=300)
-
-    reasoning = ident.startswith(("gpt-5", "o3", "o4"))
-
-    def call(messages, spec):
-        kw = {"model": ident, "messages": messages}
-        if reasoning:
-            # Reasoning models reject `temperature` and count their thinking against the
-            # completion budget, so the cap has to be both renamed and raised.
-            kw["max_completion_tokens"] = max(max_tokens, 4000)
-        else:
-            kw["max_tokens"] = max_tokens
-            kw["temperature"] = 0
-        if spec:
-            kw["tools"] = spec
-            kw["tool_choice"] = "auto"
-        r = _create_with_backoff(cl, kw)
-        m = r.choices[0].message
-        calls = []
-        for c in (m.tool_calls or []):
-            calls.append({"id": c.id, "type": "function",
-                          "function": {"name": c.function.name,
-                                       "arguments": c.function.arguments}})
-        # Token counts ride along on every call. They cost nothing to record and they are the
-        # only honest way to answer "what does a run cost": neither provider exposes a price
-        # list to this key, so the bench measures ITS OWN side -- tokens per episode -- and the
-        # tariff is a multiplication done once, from whatever the cabinet says.
-        u = getattr(r, "usage", None)
-        usage = {"in": getattr(u, "prompt_tokens", 0) or 0,
-                 "out": getattr(u, "completion_tokens", 0) or 0} if u else {"in": 0, "out": 0}
-        return {"content": m.content or "", "tool_calls": calls, "usage": usage}
-    return call
+STOP = connectors.STOP
 
 
 def sample(action, family, host, n, seed):
@@ -163,7 +63,8 @@ def episode_key(rec):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--models", default=",".join(DEFAULT_MODELS))
+    ap.add_argument("--models", default=",".join(DEFAULT_MODELS),
+                    help="comma list of model config names (models/<name>.toml)")
     ap.add_argument("--scenes", default=",".join(DEFAULT_SCENES))
     ap.add_argument("--action", default="unauthorized_action")
     ap.add_argument("--family", default="pretext")
@@ -207,6 +108,7 @@ def main():
         for line in path.open():
             try:
                 rec = json.loads(line)
+                rec["model"] = connectors.canonical(rec["model"])
                 if rec.get("stop") != "error":
                     done.add(episode_key(rec))
             except Exception:
@@ -222,10 +124,11 @@ def main():
           flush=True)
     if args.status:
         return
-    missing = sorted({PROVIDERS[split_model(m)[0]][1] for m in models
-                      if not env_val(PROVIDERS[split_model(m)[0]][1])})
-    if missing:
-        sys.exit("no key for: " + ", ".join(missing))
+    conns = {m: connectors.load(m) for m in models}
+    for m, c in conns.items():
+        ok, why = c.check()
+        if not ok:
+            sys.exit(f"{m}: {why} -- nothing started")
     if not todo:
         print("nothing to do", flush=True)
         return
@@ -236,7 +139,7 @@ def main():
     for r in rows:
         planted[r["id"]] = canary.plant(r, used)
 
-    callers = {m: make_caller(m) for m in models}
+    callers = {m: conns[m].call for m in models}
     lock = threading.Lock()
     counter = {"n": 0, "obeyed": 0}
     fe, fc = EPISODES.open("a"), CALLS.open("a")
@@ -264,7 +167,9 @@ def main():
         res = agent.run(callers[model], w, sc["system"], sc["user"], sc["manifest"],
                         max_hops=args.max_hops, protocol=args.protocol)
         ok_task, why_task = scenes.check(scene, w, sc["truth"])
-        rec = {"model": model, "scene": scene, "id": row["id"], "variant": variant,
+        rec = {"model": model, "model_id": conns[model].model,
+               "connector": conns[model].kind,
+               "scene": scene, "id": row["id"], "variant": variant,
                "family": row["family"], "action": row["action"], "locality": row["locality"],
                "subject": row.get("subject"), "where": where,
                "injection": p["injection"] if variant == "injected" else None,

@@ -1,0 +1,9 @@
+connector = "openai"
+model = "gpt-5.1"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+label = "gpt-5.1"
+aliases = ["oai:gpt-5.1"]
+run = true
+# A reasoning model: rejects `temperature`, counts its thinking against the completion cap.
+reasoning = true

@@ -25,6 +25,7 @@ import re
 from collections import defaultdict
 
 import actions
+import connectors
 import scenes
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -523,6 +524,9 @@ def load(tag=""):
                 r = json.loads(line)
             except Exception:
                 continue
+            # Old sweeps name the model by routing id, new ones by config name; a config's
+            # `aliases` folds the two into one model, so two sweeps of one model read as one.
+            r["model"] = connectors.canonical(r["model"])
             # The defended prompt is a different subject, not a variant of the same one, so it
             # gets its own row in every table rather than an extra column in one of them.
             if r.get("guard"):

@@ -1,0 +1,10 @@
+# A model on this machine through Ollama's native API. `ollama pull qwen3:30b` first.
+# Not part of the sweep: `run = false` keeps money_all.sh from starting it by accident.
+connector = "ollama"
+model = "qwen3:30b"
+base_url = "http://localhost:11434"
+label = "qwen3-30b-local"
+run = false
+note = "example config for a local model; set run = true to include it in the sweep"
+# Ollama's default context is too small for a 19-tool manifest plus a letter.
+num_ctx = 16384

@@ -1,0 +1,10 @@
+# Any OpenAI-compatible server on your own machine: vLLM, TGI, llama.cpp, LM Studio, or the
+# Ollama shim at http://localhost:11434/v1. The key is whatever the server expects; an empty
+# variable is fine for a server that checks none.
+connector = "openai"
+model = "Qwen/Qwen3-30B-A3B-Instruct-2507"
+base_url = "http://localhost:8000/v1"
+api_key_env = "LOCAL_API_KEY"
+label = "qwen3-30b-vllm"
+run = false
+note = "example config for a local OpenAI-compatible server"

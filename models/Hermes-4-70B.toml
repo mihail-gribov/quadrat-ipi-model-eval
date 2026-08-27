@@ -1,0 +1,8 @@
+# A deliberately unaligned fine-tune, included to see where the ceiling of compliance sits.
+connector = "openai"
+model = "NousResearch/Hermes-4-70B"
+base_url = "https://api.tokenfactory.nebius.com/v1/"
+api_key_env = "NEBIUS_API_KEY"
+label = "Hermes-4-70B"
+aliases = ["neb:NousResearch/Hermes-4-70B"]
+run = true

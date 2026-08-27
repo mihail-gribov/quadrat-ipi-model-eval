@@ -1,0 +1,7 @@
+connector = "openai"
+model = "deepseek-ai/DeepSeek-V4-Pro"
+base_url = "https://api.tokenfactory.nebius.com/v1/"
+api_key_env = "NEBIUS_API_KEY"
+label = "DeepSeek-V4-Pro"
+aliases = ["neb:deepseek-ai/DeepSeek-V4-Pro"]
+run = true
