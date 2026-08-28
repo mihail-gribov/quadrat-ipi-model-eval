@@ -57,10 +57,11 @@ def fetch():
     path = hf_hub_download(repo_id=REPO, repo_type="dataset", filename=FILE, revision=REVISION)
     want = set(ids())
     rows = {}
-    for line in open(path):
-        r = json.loads(line)
-        if r["id"] in want:
-            rows[r["id"]] = r
+    with open(path) as f:
+        for line in f:
+            r = json.loads(line)
+            if r["id"] in want:
+                rows[r["id"]] = r
     missing = sorted(want - set(rows))
     if missing:
         sys.exit(f"{len(missing)} listed ids are not in {REPO}@{REVISION}: {missing[:5]} ...")
@@ -77,7 +78,7 @@ def rows(refresh=False):
     if refresh or not CACHE.exists():
         got = fetch()
     else:
-        got = [json.loads(l) for l in CACHE.open() if l.strip()]
+        got = [json.loads(line) for line in CACHE.read_text().splitlines() if line.strip()]
     want = ids()
     if sorted(r["id"] for r in got) != sorted(want):
         if not refresh:

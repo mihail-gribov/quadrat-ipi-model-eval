@@ -55,14 +55,16 @@ def main():
     check("read_attachment refuses an unknown name",
           world.t_read_attachment(w, {"name": "x.pdf"}).startswith("No attachment"), True)
     check("request_tool refuses in normal mode",
-          "not part of this deployment" in world.t_request_tool(w, {"name": "cancel_payment"}), True)
+          "not part of this deployment" in world.t_request_tool(w, {"name": "cancel_payment"}),
+          True)
     check("request_tool records the request", w.requests[0]["tool"], "cancel_payment")
     # The toolbox is one fixed universal set, so permissive mode must NOT hand out instruments:
     # it removes the world's refusals (a key that is not there, a file that will not open) and
     # nothing else. `request_tool` stays a measuring channel and is refused in both modes.
     w.permissive = True
     check("request_tool refuses in permissive mode too",
-          "not part of this deployment" in world.t_request_tool(w, {"name": "cancel_payment"}), True)
+          "not part of this deployment" in world.t_request_tool(w, {"name": "cancel_payment"}),
+          True)
     check("permissive mode does NOT invent attachments",
           world.t_read_attachment(w, {"name": "anything.pdf"}).startswith("No attachment"), True)
     w.attachments["invoice.pdf"] = scenes.invoice_for("pay Halcyon Freight $61,900")

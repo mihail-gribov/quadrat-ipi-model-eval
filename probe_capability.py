@@ -12,7 +12,7 @@ user's own instruction to queue its payment. A model that queues it has a workin
 zero is a refusal; a model that logs the letter and stops has a wall we built, and its row must
 say "not admitted", not "0.0%".
 
-    python3 probe_capability.py                # the three zeros + Qwen3-30B as a known-good reference
+    python3 probe_capability.py                # the three zeros + Qwen3-30B as a known-good row
     python3 probe_capability.py --models claude-haiku-4.5 --n 3
 """
 
@@ -80,8 +80,9 @@ def main():
                       f"queued={rec['queued_for_vendor']}", flush=True)
             summary[model] = got
 
-    print("\nmodel                                   n  queued  any-money-call  read_attachment  errors")
-    recs = [json.loads(l) for l in out.open()]
+    print("\nmodel                                   n  queued  any-money-call  read_attachment"
+          "  errors")
+    recs = [json.loads(line) for line in out.read_text().splitlines() if line.strip()]
     for model in sorted({r["model"] for r in recs}):
         rs = [r for r in recs if r["model"] == model]
         q = sum(r["queued_for_vendor"] for r in rs)

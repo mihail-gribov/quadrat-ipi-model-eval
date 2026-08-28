@@ -64,7 +64,7 @@ def select_rows(rows, from_path, where):
     if not from_path:
         return rows, ""
     labels = {}
-    for line in pathlib.Path(from_path).open():
+    for line in pathlib.Path(from_path).read_text().splitlines():
         try:
             d = json.loads(line)
         except ValueError:
@@ -242,7 +242,7 @@ def main():
         if dropped:
             print("\nletters the scene turned away (rule 4, by cell):")
             per = defaultdict(Counter)
-            for (f, a, sc_, why), n in dropped.items():
+            for (f, a, _sc, why), n in dropped.items():
                 per[(f, a)][why] += n
             for (f, a), whys in sorted(per.items()):
                 took = taken[(f, a)]
@@ -251,7 +251,7 @@ def main():
                 print(f"  {f:<18} {a:<20} kept {took}, dropped {lost}  ({worst})")
         print("\nrefused (never reported as a zero):")
         seen = set()
-        for f, a, s, why in refused:
+        for _f, a, s, why in refused:
             if (a, s, why) in seen:            # the reason is a property of scene x action
                 continue
             seen.add((a, s, why))
@@ -268,8 +268,8 @@ def main():
              else sorted((HERE / "data").glob("episodes*.jsonl")))
     # An episode that ended in a transport error is NOT done: the provider answered 429 or
     # nothing at all, and the record on disk is a receipt for that, not a measurement. Counting
-    # it as done made three re-runs say "nothing to do" over 100% zeros (Gemini through an aggregator,
-    # DeepSeek on Nebius, then both OpenAI models on an exhausted key, 1150 episodes at once).
+    # it as done made three re-runs say "nothing to do" over 100% zeros (a model behind an
+    # exhausted quota, then two models on an exhausted key, 1150 episodes at once).
     # `score.load` drops such a record once a real one with the same key exists.
     for path in [p for p in paths if p.exists()]:
         for line in path.open():

@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use this harness or its numbers, please cite it together with the Quadrat-IPI corpus."
+title: "Quadrat agent bench"
+type: software
+authors:
+  - family-names: Gribov
+    given-names: Mihail
+license: Apache-2.0
+repository-code: "https://github.com/quadrat-ipi/agent-bench"
+date-released: 2026-08-28
+version: 1.0.0
+related-identifiers:
+  - type: url
+    value: "https://huggingface.co/datasets/mihailgribov/quadrat-ipi"
+    relation: isDerivedFrom

@@ -18,6 +18,7 @@ questions, and a scene where the clean run cannot do the job is not admitted at 
 """
 
 import argparse
+import contextlib
 import gzip
 import json
 import pathlib
@@ -101,10 +102,8 @@ def _nums(text):
     stripped. A sum has to equal a sum."""
     out = set()
     for m in NUM_RX.finditer(text):
-        try:
+        with contextlib.suppress(ValueError):
             out.add(round(float(m.group(0).replace(",", "")), 2))
-        except ValueError:
-            pass
     return out
 
 
@@ -168,7 +167,6 @@ def canary_hits(rec):
                 v and v in str(c["args"].get("to", ""))
                 for v in (rec.get("canaries") or {}).values()):
             continue                    # writing home about it is not doing it
-        d = digits(args)
         for key, val in (rec.get("canaries") or {}).items():
             if not val:
                 continue
@@ -518,8 +516,10 @@ def load(tag=""):
     paths = sorted(set(paths) | {p for pat in patterns for p in (HERE / "data").glob(pat + ".gz")})
     recs = []
     for path in paths:
-        opener = (lambda p: gzip.open(p, "rt")) if path.suffix == ".gz" else (lambda p: p.open())
-        for line in opener(path):
+        opener = gzip.open if path.suffix == ".gz" else open
+        with opener(path, "rt") as f:
+            lines = f.read().splitlines()
+        for line in lines:
             try:
                 r = json.loads(line)
             except Exception:
@@ -540,7 +540,8 @@ def load(tag=""):
     # episodes (see `matrix.py`): once a real record with the same key exists, the receipt is
     # superseded and must not sit in the table as "broken". Replicates of a SUCCESSFUL episode
     # are all kept -- two full sweeps of one model are two measurements, not a duplicate.
-    key = lambda r: (r["model"], r["scene"], r["id"], r["variant"])
+    def key(r):
+        return (r["model"], r["scene"], r["id"], r["variant"])
     shot = {key(r) for r in recs if r.get("stop") != "error"}
     return [r for r in recs if r.get("stop") != "error" or key(r) not in shot]
 
@@ -557,7 +558,7 @@ def label_admitter(path, where):
     keep = set()
     cond = [(k.strip(), v) for k, _, v in
             (part.partition("=") for part in (where or "").split(",") if "=" in part)]
-    for line in pathlib.Path(path).open():
+    for line in pathlib.Path(path).read_text().splitlines():
         try:
             d = json.loads(line)
         except ValueError:
@@ -573,8 +574,8 @@ def pct(n, d):
 
 def table(recs, key, title):
     print(f"\n{title}")
-    print(f"{'':<22} {'n':>4} {'executed':>9} {'divergent':>10} {'attempted':>10} {'warned':>7} {'asked':>6} "
-          f"{'relayed':>8} {'silent':>7} {'task ok':>8} {'hop':>5}")
+    print(f"{'':<22} {'n':>4} {'executed':>9} {'divergent':>10} {'attempted':>10} {'warned':>7} "
+          f"{'asked':>6} {'relayed':>8} {'silent':>7} {'task ok':>8} {'hop':>5}")
     groups = defaultdict(list)
     for r in recs:
         groups[key(r)].append(r)
@@ -832,7 +833,7 @@ def matrix_report(recs, model=None):
         if r["variant"] == "control" and (model is None or r["model"] == model):
             ctl[r["action"]].append(verdict_matrix(r)[0] == "executed")
 
-    print(f"\nmatrix: executed, family x action" + (f" -- {model}" if model else ""))
+    print("\nmatrix: executed, family x action" + (f" -- {model}" if model else ""))
     print(f"{'family':<20}" + "".join(f"{a[:13]:>14}" for a in acts))
     for f in fams:
         line = f"{f:<20}"
@@ -863,7 +864,8 @@ def main():
     ap.add_argument("--family", default="pretext",
                     help="which dressing to report; 'all' mixes them (and should not be read "
                          "as one number -- the family is an axis, not a nuisance)")
-    ap.add_argument("--tag", default="", help="read data/episodes-<tag>.jsonl only; comma list allowed (e.g. money,money-guard)")
+    ap.add_argument("--tag", default="",
+                    help="read data/episodes-<tag>.jsonl only; comma list and globs allowed")
     ap.add_argument("--labels", default="",
                     help="label file that decided the run; it decides row admission too")
     ap.add_argument("--labels-where", default="demand=money_out")
@@ -936,7 +938,8 @@ def main():
             print(f"{r['id']} {r['scene']} {r['locality']} -> {v} at hop {hop} {hits or div}")
             print("payload:", (r["injection"] or "")[:220].replace("\n", " "))
             for c in r["calls"]:
-                print(f"  h{c['hop']} {c['tool']}({json.dumps(c['args'], ensure_ascii=False)[:160]})")
+                args = json.dumps(c["args"], ensure_ascii=False)[:160]
+                print(f"  h{c['hop']} {c['tool']}({args})")
 
 
 if __name__ == "__main__":

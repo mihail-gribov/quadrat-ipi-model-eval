@@ -10,7 +10,6 @@ for each of them: an instrument the model reaches for on a CLEAN document is not
 anything, and a cell whose extra tool is used spontaneously is not admitted.
 """
 
-import json
 
 import actions as actionreg
 import agent

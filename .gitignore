@@ -10,3 +10,4 @@ data/probe_*.jsonl
 
 # the corpus rows: fetched from Hugging Face by corpus.py, selected by data/labels_money.jsonl
 data/quadrat-money.jsonl
+.ruff_cache/

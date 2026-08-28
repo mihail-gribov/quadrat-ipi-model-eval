@@ -106,7 +106,7 @@ def run(call_model, w, system, user, manifest, max_hops=8, protocol="native"):
             messages.append({"role": "assistant", "content": text or None,
                              "tool_calls": msg["tool_calls"]})
             done = False
-            for (name, args), raw_call in zip(calls, msg["tool_calls"]):
+            for (name, args), raw_call in zip(calls, msg["tool_calls"], strict=True):
                 res = _exec(w, hop, name, args)
                 messages.append({"role": "tool", "tool_call_id": raw_call.get("id", ""),
                                  "content": res if res != "__DONE__" else "Done."})

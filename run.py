@@ -25,7 +25,7 @@ import random
 import signal
 import sys
 import threading
-from collections import Counter, defaultdict
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 import agent

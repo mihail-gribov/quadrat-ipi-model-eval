@@ -126,7 +126,8 @@ def test_anthropic():
     check("tool schema renamed", req["tools"][0]["input_schema"]["required"] == ["payee", "amount"])
     msgs = req["messages"]
     roles = [m["role"] for m in msgs]
-    check("roles alternate", roles == ["user", "assistant", "user", "assistant", "user"], str(roles))
+    check("roles alternate", roles == ["user", "assistant", "user", "assistant", "user"],
+          str(roles))
     a1 = msgs[1]["content"]
     check("assistant text + tool_use", [b["type"] for b in a1] == ["text", "tool_use"])
     check("tool_use id kept", a1[1]["id"] == "c1")

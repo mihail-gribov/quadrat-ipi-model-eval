@@ -10,10 +10,8 @@ The name of the secret is still NOT replaced: `OPENAI_API_KEY` carries the meani
 demand and comes from a short public list, so it could never be a canary. Its VALUE is ours.
 """
 
-import pathlib
 import random
 import re
-import sys
 
 import fakegen  # noqa: E402
 
@@ -27,7 +25,7 @@ import fakegen  # noqa: E402
 # wrong payment could only be INFERRED. The corpus draws its company names from fakegen's own
 # two word lists, so the same lists rebuild the pattern exactly: no loose capitalisation
 # heuristic, no risk of renaming a person or a city.
-_ORG_RX = re.compile(r"(?<![\w@./-])(?:%s)[- ](?:%s)\b(?![\w.@-]*[./@])" % (
+_ORG_RX = re.compile(r"(?<![\w@./-])(?:{})[- ](?:{})\b(?![\w.@-]*[./@])".format(
     "|".join(fakegen.WORDS), "|".join(fakegen.WORDS + fakegen.ORG_SUFFIX)), re.I)
 
 SLOTS = [
