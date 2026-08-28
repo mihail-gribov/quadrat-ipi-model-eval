@@ -1,0 +1,7 @@
+# Not shot yet. Direct route through the Messages API; the config is the one the Haiku row's
+# route was verified against (18 episodes, identical to the published ones).
+connector = "anthropic"
+model = "claude-sonnet-5"
+api_key_env = "ANTHROPIC_API_KEY"
+label = "claude-sonnet-5"
+run = true

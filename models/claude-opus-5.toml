@@ -1,0 +1,7 @@
+# Not shot yet. Direct route through the Messages API. The dearest row in the sweep: about
+# 4 to 10 million input tokens for the 575 episodes; keep it last, or run it alone with ONLY=.
+connector = "anthropic"
+model = "claude-opus-5"
+api_key_env = "ANTHROPIC_API_KEY"
+label = "claude-opus-5"
+run = true
