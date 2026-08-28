@@ -4,9 +4,10 @@ translations.
     python3 test_connectors.py        # or: pytest test_connectors.py
 
 Nothing here calls a model. The OpenAI connector passes the harness's own message shape
-through untouched, so what needs proving is the other two: that an OpenAI-shaped history
-becomes a valid Messages API request and a valid Ollama request, and that their answers come
-back in the one shape `agent.py` reads.
+through, so for it what needs proving is the request keys and that a tool call comes back with
+its provider extras; for the other two, that an OpenAI-shaped history becomes a valid Messages
+API request and a valid Ollama request, and that their answers come back in the one shape
+`agent.py` reads.
 """
 
 import json
@@ -81,11 +82,11 @@ def check_configs():
         mine = [n for n in allc if n in ("broken", "cold", "mine", "pigeon", "late")]
         check("sweep order: `order` first, then name",
               mine == ["broken", "cold", "mine", "pigeon", "late"], str(mine))
-        connectors._ALIASES.clear()
+        connectors.forget_configs()
         check("alias folds to name", connectors.canonical("old:m", d) == "mine")
         check("suffix kept", connectors.canonical("old:m +guard", d) == "mine +guard")
         check("unknown id passes through", connectors.canonical("zzz", d) == "zzz")
-        connectors._ALIASES.clear()
+        connectors.forget_configs()
         try:
             connectors.find_config("absent", d)
             check("absent config raises", False)

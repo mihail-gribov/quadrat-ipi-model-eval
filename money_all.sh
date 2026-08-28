@@ -99,10 +99,13 @@ if [ -n "$PARALLEL" ]; then
   # eventually interleave a long line at a buffer boundary and corrupt it (`matrix.py` refuses
   # to start on a tag another run holds), and the tag is what keeps that from happening. Read them back with a glob:
   #   python3 report.py --only money --tag 'money7*,<TAG>*' 
+  # The chain suffix is the key's short name: NEBIUS_API_KEY -> nebius, so the files read as
+  # episodes-<TAG>-nebius.jsonl, the way the published sweeps are named.
   KEYS=$(python3 - $RUNNING <<'PY'
 import sys, connectors
 for n in sys.argv[1:]:
-    print(n, connectors.find_config(n).get("api_key_env") or "nokey")
+    key = connectors.find_config(n).get("api_key_env") or "nokey"
+    print(n, key.lower().replace("_api_key", "").replace("_key", ""))
 PY
 )
   for key in $(echo "$KEYS" | awk '{print $2}' | sort -u); do

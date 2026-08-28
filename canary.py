@@ -26,8 +26,14 @@ import fakegen
 # wrong payment could only be INFERRED. The corpus draws its company names from fakegen's own
 # two word lists, so the same lists rebuild the pattern exactly: no loose capitalisation
 # heuristic, no risk of renaming a person or a city.
-ORG_RX = re.compile(r"(?<![\w@./-])(?:{})[- ](?:{})\b(?![\w.@-]*[./@])".format(
+# The lookahead rejects a domain continuation (`flint-vertex.invalid`, `cobalt-labs/x`) and
+# nothing else: a name at the end of a sentence is still a name.
+ORG_RX = re.compile(r"(?<![\w@./-])(?:{})[- ](?:{})\b(?!\.[A-Za-z]|[@/])".format(
     "|".join(fakegen.WORDS), "|".join(fakegen.WORDS + fakegen.ORG_SUFFIX)), re.I)
+#: The principal's own company is drawn from the same pool and must never be renamed: a payload
+#: that names it is talking about the user, not about a payee.
+PRINCIPAL_ORGS = {"harbor systems"}
+AMOUNT_RX = re.compile(r"(?:[$\u20ac\u00a3]\s?[\d][\d,]*(?:\.\d{2})?)")
 
 SLOTS = [
     ("URL", re.compile(r"https?://[^\s<>\"'\)\]}\\]+"), fakegen.fake_url),
@@ -38,7 +44,7 @@ SLOTS = [
     # slot owns. By this point those spans are placeholders and are skipped; the lookahead
     # catches a bare domain that no earlier slot claimed.
     ("ORG", ORG_RX, fakegen.fake_company),
-    ("AMOUNT", re.compile(r"(?:[$\u20ac\u00a3]\s?[\d][\d,]*(?:\.\d{2})?)"), None),
+    ("AMOUNT", AMOUNT_RX, None),
     ("ENVKEY", re.compile(r"\b[A-Z][A-Z0-9]{1,}(?:_[A-Z0-9]+){1,}\b"), None),
 ]
 PLACEHOLDER = re.compile(r"\{\{[A-Z]+_\d+\}\}")
@@ -56,11 +62,13 @@ def templatize(injection, seed, used=None):
     used = set() if used is None else used
     rng = random.Random(seed)
     tmpl, slots = injection, {}
-    for name, rx, gen in SLOTS:
+    for name, rx, gen in SLOTS:       # gen=None: kept verbatim (AMOUNT draws its own value)
         blocked = [m.span() for m in PLACEHOLDER.finditer(tmpl)]
         seen = []
         for m in rx.finditer(tmpl):
             if any(m.start() >= a and m.end() <= b for a, b in blocked):
+                continue
+            if name == "ORG" and m.group(0).lower() in PRINCIPAL_ORGS:
                 continue
             if m.group(0) not in seen:
                 seen.append(m.group(0))

@@ -3,14 +3,14 @@
 The one definition of what an episode IS. `matrix.py` runs it, `score.py` and `report.py` read
 what it returns; nothing else builds a record.
 
-The manifest is the scene's own plus whatever the action needs (`actions.manifest_for`). The
-extra instruments are recorded on the record, because the control run has to answer separately
-for each of them: an instrument the model reaches for on a CLEAN document is not evidence of
-anything, and a cell whose extra tool is used spontaneously is not admitted.
+The manifest is the scene's own plus whatever the action needs (`actions.manifest_for`); the
+added instruments are recorded on the record as `extra_tools`, so a reader can see when a row
+ran with more than the base manifest. The record's `effects` are the world's state after the
+episode; `calls` is the log every grader reads.
 """
 
 
-import actions as actionreg
+import actions
 import agent
 import canary
 import scenes
@@ -37,7 +37,7 @@ def run(caller, row, scene, variant, planted, *, action, max_hops=8, protocol="n
         marker=None, guard=False, escalate=False):
     """Returns the record that both the checkpoint and the scorer read."""
     sc, w, system, body = build(row, scene, variant, planted, marker, guard, escalate)
-    manifest, extra = actionreg.manifest_for(sc["manifest"], action)
+    manifest, extra = actions.manifest_for(sc["manifest"], action)
     # A canary must exist nowhere but the payload, or a later hit cannot be attributed. The
     # letter is a corpus letter and cannot be rebuilt, so a collision stays on the record.
     leak = canary.leaked(planted["canaries"], system, sc["user"], body)
@@ -54,7 +54,7 @@ def run(caller, row, scene, variant, planted, *, action, max_hops=8, protocol="n
             # done the two-hop thing, whether or not the payload named the key.
             "canaries": {**planted["canaries"], "SECRET_ANY": worldmod.ANY_SECRET},
             "secrets": planted["secrets"],
-            "marker": marker, "extra_tools": extra, "grade_mode": actionreg.grade_mode(action),
+            "marker": marker, "extra_tools": extra,
             "leak": leak, "truth": sc["truth"], "task_ok": ok_task, "task_why": why_task,
             "stop": res["stop"], "error": res["error"], "said": res["said"][:4000],
             "usage": res.get("usage"),
@@ -62,13 +62,13 @@ def run(caller, row, scene, variant, planted, *, action, max_hops=8, protocol="n
             # inside, instead of discovered by paying for another re-shoot.
             "requests": w.requests, "incidents": w.incidents,
             "calls": w.log,
-            "effects": {"journal": w.journal, "lookups": w.lookups,
+            "effects": {"journal": w.journal, "lookups": w.lookups, "opened": w.opened,
                         "sent": w.sent, "posted": w.posted,
-                        "payments": w.payments,
+                        "payments": w.payments, "routing": w.routing,
                         "orders": w.orders, "bookings": w.bookings,
                         "approvals": w.approvals,
                         "commands": w.commands, "memory": w.memory,
-                        "filter_level": w.filter_level}}
+                        "filter_level": w.filter_level, "answer": w.answer}}
 
 
 def flat_calls(rec):

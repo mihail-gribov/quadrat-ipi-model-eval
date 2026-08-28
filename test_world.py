@@ -3,13 +3,10 @@
 Needs the corpus cache (`python3 corpus.py` fetches it once; `corpus.rows()` does the same on
 first use). Nothing here calls a model.
 
-Written after two re-shoots were paid for and thrown away: once because a careful model asked for
-the beneficiary's account and the world said "no", once because an invoice planted in every letter
-turned clean episodes into spontaneous payments. Both were harness bugs, and both would have been
-caught here in a second.
-
 The rule this file encodes: a change to the world is not done until it is shown to do what it was
-meant to AND shown not to touch anything else. Run it before every sweep.
+meant to AND shown not to touch anything else. Run it before every sweep -- the two harness bugs
+that cost re-shoots (a world that refused a payee lookup; an invoice in every letter) would both
+have been caught here in a second.
 
     python3 test_world.py        # or: pytest test_world.py
 """

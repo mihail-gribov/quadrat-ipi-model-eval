@@ -34,9 +34,10 @@ import signal
 import sys
 import threading
 from collections import Counter, defaultdict
+from itertools import zip_longest
 from concurrent.futures import ThreadPoolExecutor
 
-import actions as actionreg
+import actions
 import canary
 import connectors
 import corpus
@@ -71,27 +72,10 @@ def select_rows(rows, from_path, where):
     """
     if not from_path:
         return rows, ""
-    labels = {}
-    for line in pathlib.Path(from_path).read_text().splitlines():
-        try:
-            d = json.loads(line)
-        except ValueError:
-            continue
-        if d.get("id"):
-            labels[d["id"]] = d
-    cond = []
-    for part in (where or "").split(","):
-        if "=" in part:
-            k, _, v = part.partition("=")
-            cond.append((k.strip(), {x for x in v.split("|") if x}))
-    keep = []
-    for r in rows:
-        d = labels.get(r["id"])
-        if d is None:
-            continue
-        if all(str(d.get(k)) in vals for k, vals in cond):
-            keep.append(r)
-    unlabelled = sum(1 for r in rows if r["id"] not in labels)
+    labels = corpus.read_labels(from_path, where)
+    keep = [r for r in rows if r["id"] in labels]
+    listed = corpus.read_labels(from_path)
+    unlabelled = sum(1 for r in rows if r["id"] not in listed)
     note = (f"input {pathlib.Path(from_path).name}"
             f"{' where ' + where if where else ''}: {len(keep)} of {len(rows)} rows"
             f"{f'; {unlabelled} not in the label file' if unlabelled else ''}")
@@ -112,13 +96,14 @@ def plan(rows, scene_names, per_cell, seed):
             if not ok_mean:
                 refused.append((family, action, scene, why))
                 continue
-            manifest, _ = actionreg.manifest_for(scenes.SCENES[scene][2], action)
+            manifest, _ = actions.manifest_for(scenes.SCENES[scene][2], action)
             ok_tool, why_tool = toolreg.admits(manifest, action)
             if not ok_tool:
                 refused.append((family, action, scene, why_tool))
                 continue
-            if actionreg.grade_mode(action) == "none":
-                refused.append((family, action, scene, "not gradable in one move"))
+            if actions.grade_mode(action) != "sink":
+                refused.append((family, action, scene,
+                                f"{actions.grade_mode(action)} grading is not implemented"))
                 continue
             usable.append(scene)
         if not usable:
@@ -134,7 +119,7 @@ def plan(rows, scene_names, per_cell, seed):
             # rather than assumed.
             admitted = []
             for r in ordered:
-                bad, why_bad = actionreg.unverifiable(r)
+                bad, why_bad = actions.unverifiable(r)
                 if bad:
                     dropped[(family, action, scene, why_bad)] += 1
                     continue
@@ -153,7 +138,7 @@ def plan(rows, scene_names, per_cell, seed):
 
 def marker_for(row):
     h = hashlib.sha1(row["id"].encode()).hexdigest()[:10].upper()
-    return actionreg.PROMPT_MARKER.format(h)
+    return actions.PROMPT_MARKER.format(h)
 
 
 def main():
@@ -163,9 +148,9 @@ def main():
     ap.add_argument("--scenes", default="intake_mail")
     ap.add_argument("--host", default="email",
                     help="carriers to draw payloads from: comma list or *")
-    ap.add_argument("--per-cell", type=int, default=8,
+    ap.add_argument("--per-cell", type=int, default=0,
                     help="rows per (family, action) cell; 0 = every row the filters leave")
-    ap.add_argument("--control-per-cell", type=int, default=10,
+    ap.add_argument("--control-per-cell", type=int, default=20,
                     help="control episodes per (family, action, scene); 0 = one per injected row")
     ap.add_argument("--actions", default="", help="comma list, default all in the corpus")
     ap.add_argument("--families", default="", help="comma list, default all in the corpus")
@@ -193,6 +178,10 @@ def main():
 
     out_ep = HERE / "data" / f"episodes-{args.tag}.jsonl"
     out_calls = HERE / "data" / f"calls-{args.tag}.jsonl"
+    # The config, resolved first: `--model` may be an alias or a .toml path, and the resume key
+    # and the record both carry the config NAME, or a re-run under the alias would start over.
+    conn = connectors.load(args.model)
+    model = conn.name
     scene_names = [s.strip() for s in args.scenes.split(",") if s.strip()]
     rows = load_rows(args.host)
     if args.actions:
@@ -226,7 +215,7 @@ def main():
 
     cells = sorted({(f, a) for f, a, _, _ in jobs})
     n_inj = sum(1 for x in specs if x[4] == "injected")
-    print(f"model {args.model}{' +guard' if args.guard else ''}"
+    print(f"model {model}{' +guard' if args.guard else ''}"
           f"{' +escalate' if args.escalate else ''} | host {args.host} | "
           f"{len(cells)} cells x scenes -> "
           f"{n_inj} injected + {len(specs) - n_inj} control = {len(specs)} episodes", flush=True)
@@ -270,7 +259,7 @@ def main():
     # what a changed WORLD requires -- other runs measured something else and must not be
     # counted as done -- while still letting an interrupted run continue instead of writing
     # every episode twice.
-    done = set()
+    done, unreadable = set(), 0
     paths = ([HERE / "data" / f"episodes-{args.tag}.jsonl"] if args.fresh
              else sorted((HERE / "data").glob("episodes*.jsonl")))
     # An episode that ended in a transport error is NOT done: the provider answered 429 or
@@ -278,23 +267,26 @@ def main():
     # it as done makes a re-run say "nothing to do" over a column of zeros that were never
     # measured. `score.load` drops such a record once a real one with the same key exists.
     for path in [p for p in paths if p.exists()]:
-        for line in path.open():
+        for line in path.read_text().splitlines():
             try:
                 d = json.loads(line)
                 if d.get("stop") == "error":
                     continue
                 done.add((connectors.canonical(d["model"]), d["scene"], d["id"], d["variant"],
                           bool(d.get("guard")), bool(d.get("escalate"))))
-            except Exception:
-                pass
+            except (ValueError, KeyError):
+                unreadable += 1
+    if unreadable:
+        print(f"  {unreadable} unreadable lines in data/episodes*.jsonl (a run cut mid-write?)",
+              flush=True)
     todo = [x for x in specs
-            if (args.model, x[2], x[3]["id"], x[4], args.guard, args.escalate) not in done]
+            if (model, x[2], x[3]["id"], x[4], args.guard, args.escalate) not in done]
     # Round-robin: one job per cell, then the next, so an interrupted run is still balanced.
     order = defaultdict(list)
     for j in todo:
         order[(j[0], j[1], j[2])].append(j)
-    todo = [j for i in range(max((len(v) for v in order.values()), default=0))
-            for k in sorted(order) for j in ([order[k][i]] if i < len(order[k]) else [])]
+    todo = [j for round_ in zip_longest(*(order[k] for k in sorted(order)))
+            for j in round_ if j is not None]
 
     coverage = Counter((f, a) for f, a, _, _, _ in todo)
     print(f"  done {len(specs) - len(todo)}, left {len(todo)}; "
@@ -307,15 +299,16 @@ def main():
         print("nothing to do", flush=True)
         return
 
-    conn = connectors.load(args.model)
     ok, why = conn.check()
     if not ok:
-        sys.exit(f"{args.model}: {why} -- nothing started")
+        sys.exit(f"{model}: {why} -- nothing started")
     lock_path = HERE / "data" / f"episodes-{args.tag}.lock"
-    if lock_path.exists():
+    try:
+        with lock_path.open("x") as f:
+            f.write(str(os.getpid()))
+    except FileExistsError:
         sys.exit(f"{lock_path.name} exists: another run holds tag {args.tag!r}. "
                  f"Wait for it, or remove the file if that run is dead -- nothing started")
-    lock_path.write_text(str(os.getpid()))
 
     used, planted = set(), {}
     for _, _, _, r in jobs:
@@ -334,7 +327,7 @@ def main():
         rec = episode.run(caller, row, scene, variant, planted[row["id"]], action=action,
                           max_hops=args.max_hops, protocol=args.protocol,
                           marker=marker_for(row), guard=args.guard, escalate=args.escalate)
-        rec["model"] = args.model
+        rec["model"] = model
         rec["model_id"] = conn.model
         rec["connector"] = conn.kind
         with lock:

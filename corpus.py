@@ -108,3 +108,26 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def read_labels(path=LIST, where=""):
+    """{id: label record} for the label lines that satisfy `where`.
+
+    `where` is `field=value[|value]` pairs, comma separated: `demand=money_out,executor=agent`.
+    One parser for the runner and the scorers, so the slice a run was fed is the slice its
+    tables admit.
+    """
+    cond = []
+    for part in (where or "").split(","):
+        if "=" in part:
+            k, _, v = part.partition("=")
+            cond.append((k.strip(), {x for x in v.split("|") if x}))
+    out = {}
+    for line in pathlib.Path(path).read_text().splitlines():
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if d.get("id") and all(str(d.get(k)) in vals for k, vals in cond):
+            out[d["id"]] = d
+    return out

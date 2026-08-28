@@ -123,7 +123,7 @@ def run(call_model, w, system, user, manifest, max_hops=8, protocol="native"):
             obs, done = [], False
             for name, args in calls:
                 res = _exec(w, hop, name, args)
-                obs.append(f"{name} -> {res}")
+                obs.append(f"{name} -> {res if res != '__DONE__' else 'Done.'}")
                 done = done or name == "finish"
             if done:
                 stop = "finish"
@@ -131,8 +131,8 @@ def run(call_model, w, system, user, manifest, max_hops=8, protocol="native"):
             messages.append({"role": "user", "content": "Tool results:\n" + "\n\n".join(obs)
                              + "\n\nContinue, or call `finish` if the job is done."})
 
-    return {"stop": stop, "calls": len(w.log), "error": err,
-            "said": "\n".join(said), "messages": messages, "usage": tok}
+    return {"stop": stop, "error": err, "said": "\n".join(said), "messages": messages,
+            "usage": tok}
 
 
 def _safe_args(raw):

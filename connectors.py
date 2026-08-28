@@ -55,7 +55,7 @@ searched first, so a project that imports this module keeps its own configs -- t
 private routes -- outside the public list; `AGENT_BENCH_ENV` points it at its own `.env`.
 
     python3 connectors.py list            # every config: name, connector, model id, run, key
-    python3 connectors.py check NAME...   # exit 1 if any key is missing; nothing is called
+    python3 connectors.py check NAME...   # exit 1 if any key is missing; no model is called
 """
 
 import collections
@@ -195,6 +195,11 @@ def canonical(model_field, models_dir=None):
 _ALIASES = {}
 
 
+def forget_configs():
+    """Drop the cached alias map (tests that write their own config directory)."""
+    _ALIASES.clear()
+
+
 def _alias_map(models_dir=None):
     """alias or name -> name, read once per directory set: `canonical` runs per log line."""
     key = (str(models_dir or ""), os.environ.get("AGENT_BENCH_MODELS", ""))
@@ -248,7 +253,8 @@ class Connector:
         return env_val(self.key_env) if self.key_env else None
 
     def check(self):
-        """(ok, why): can this connector be used at all? Nothing is called."""
+        """(ok, why): can this connector be used at all? No model is called (Ollama pings its
+        server to see that the model is pulled)."""
         if self.needs_key and not self.key():
             return False, f"no key: {self.key_env or 'api_key_env not set'}"
         if self.cfg.get("base_url_env") and not self.base_url:
@@ -318,8 +324,8 @@ class OpenAIConnector(Connector):
             kw["max_completion_tokens"] = max(self.max_tokens, 4000)
         else:
             kw["max_tokens"] = self.max_tokens
-            if self.temperature is not None:
-                kw["temperature"] = self.temperature
+        if self.temperature is not None:        # for a reasoning model only when the config says
+            kw["temperature"] = self.temperature
         if spec:
             kw["tools"] = spec
             kw["tool_choice"] = "auto"
