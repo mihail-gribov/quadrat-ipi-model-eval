@@ -1,8 +1,9 @@
-# Published through an aggregator (alias); direct route as for gemini-3.7-flash.
+# The published row was shot through an OpenAI-compatible aggregator (the alias). This config
+# is Google's own OpenAI-compatible surface on your key.
 connector = "openai"
 model = "gemini-3.1-pro-preview"
 base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
 api_key_env = "GOOGLE_API_KEY"
 label = "gemini-3.1-pro"
-aliases = ["oac:gemini/gemini-3.1-pro-preview", "tw:gemini/gemini-3.1-pro-preview"]
+aliases = ["oac:gemini/gemini-3.1-pro-preview"]
 run = true

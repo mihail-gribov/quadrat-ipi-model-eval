@@ -5,4 +5,4 @@ api_key_env = "NEBIUS_API_KEY"
 label = "Kimi-K3"
 aliases = ["neb:moonshotai/Kimi-K3"]
 run = false
-note = "calls tools correctly but ~35s per hop; same trap as Llama"
+note = "calls tools correctly but ~35s per hop on this hosting: about 3h for one row. Turn on if the row is wanted"

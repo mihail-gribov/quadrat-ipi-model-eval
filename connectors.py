@@ -40,11 +40,15 @@ the rest of the harness knows about a model.
 Config keys common to every connector:
 
     connector, model, label, run, note, aliases (old ids of the same model in older logs),
+    order (sweep position for money_all.sh; lower runs first, default 50),
     api_key_env (name of the env var / .env line holding the key), base_url, or
     base_url_env when the URL itself is private,
-    max_tokens, temperature (omit to send none), timeout (seconds), extra (a table merged
-    into every request body as-is: reasoning effort, thinking config, whatever the endpoint
-    takes).
+    max_tokens, temperature, timeout (seconds), extra (a table merged into every request body
+    as-is: reasoning effort, thinking config, whatever the endpoint takes).
+
+Temperature: `openai` and `ollama` send 0 unless the config says otherwise; `anthropic` sends
+none. `temperature = "none"` makes any connector leave it out -- the newest models reject the
+parameter.
 
 Configs are read from `models/` beside this file. `AGENT_BENCH_MODELS` names another directory,
 searched first, so a project that imports this module keeps its own configs -- the ones with
@@ -58,9 +62,9 @@ import collections
 import json
 import os
 import pathlib
+import re
 import sys
 import threading
-import time
 import tomllib
 import urllib.error
 import urllib.request
@@ -72,8 +76,8 @@ STOP = threading.Event()        # set by the runner on Ctrl-C; a backoff in prog
 
 # Throttling and provider hiccups are waited out here rather than surfaced: a 429 is not a
 # measurement of the model. The client libraries' own two retries span seconds, which is
-# nothing against a per-second limit hit from eight workers -- one free tier turned 569 of 575
-# episodes into 429 receipts before this existed. After the last wait the call is made once
+# nothing against a per-minute cap hit from eight workers -- one free tier turned nearly a
+# whole sweep into 429 receipts before this existed. After the last wait the call is made once
 # more and its error, if any, is the episode's error.
 WAITS = (2, 4, 8, 16, 32, 60)
 
@@ -98,9 +102,21 @@ def env_val(key):
     for env_file in env_files():
         if env_file.exists():
             for line in env_file.read_text().splitlines():
-                if line.startswith(key + "="):
-                    return line.split("=", 1)[1].strip()
+                m = _ENV_LINE.match(line)
+                if m and m.group(1) == key:
+                    return _unquote(m.group(2))
     return None
+
+
+_ENV_LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+
+
+def _unquote(v):
+    """The right-hand side of a `.env` line: quotes and a trailing comment stripped."""
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        return v[1:-1]
+    return v.split(" #", 1)[0].strip()
 
 
 # ----------------------------------------------------------------------------- config files
@@ -125,8 +141,12 @@ def read_config(path):
     cfg.setdefault("label", cfg["name"])
     cfg.setdefault("run", True)
     cfg.setdefault("aliases", [])
+    cfg.setdefault("order", 50)
     if "connector" not in cfg or "model" not in cfg:
         raise ValueError(f"{path}: a config needs `connector` and `model`")
+    if cfg["connector"] not in CONNECTORS:
+        raise ValueError(f"{path}: unknown connector {cfg['connector']!r}; "
+                         f"known: {', '.join(CONNECTORS)}")
     cfg["path"] = str(path)
     return cfg
 
@@ -145,7 +165,8 @@ def find_config(name, models_dir=None):
 
 
 def all_configs(models_dir=None):
-    """Every config, by name; a directory earlier in the search order shadows a later one."""
+    """Every config, by name, in sweep order (`order`, then name); a directory earlier in the
+    search order shadows a later one."""
     out = {}
     for d in model_dirs(models_dir):
         for p in sorted(d.glob("*.toml")):
@@ -154,9 +175,9 @@ def all_configs(models_dir=None):
                     out[p.stem] = read_config(p)
                 except Exception as e:                      # a broken file is reported, not hidden
                     out[p.stem] = {"name": p.stem, "label": p.stem, "run": False,
-                                   "connector": "?", "model": "?", "aliases": [],
+                                   "connector": "?", "model": "?", "aliases": [], "order": 50,
                                    "note": f"unreadable: {e}", "path": str(p), "broken": True}
-    return out
+    return dict(sorted(out.items(), key=lambda kv: (kv[1]["order"], kv[0].lower())))
 
 
 def canonical(model_field, models_dir=None):
@@ -210,7 +231,9 @@ class Connector:
         self.name = cfg["name"]
         self.model = cfg["model"]
         self.max_tokens = int(cfg.get("max_tokens", 1600))
-        self.temperature = cfg.get("temperature")
+        t = cfg.get("temperature")
+        self.temperature = None if t in (None, "none") else float(t)
+        self.temperature_set = "temperature" in cfg     # a subclass may default it otherwise
         self.timeout = float(cfg.get("timeout", 300))
         self.extra = dict(cfg.get("extra") or {})
         self.key_env = cfg.get("api_key_env")
@@ -241,7 +264,8 @@ class Connector:
             except Exception as e:
                 if STOP.is_set() or not self.retryable(e):
                     raise
-                time.sleep(wait)
+                if STOP.wait(wait):            # Ctrl-C during a wait: give up now
+                    raise
         return self._call(messages, spec)
 
     def _call(self, messages, spec):
@@ -260,6 +284,11 @@ class OpenAIConnector(Connector):
     Extra keys: `reasoning = true` for models that reject `temperature` and count their
     thinking against the completion budget (the cap is then sent as `max_completion_tokens`
     and raised to at least 4000).
+
+    Tool calls are returned as the endpoint sent them, extra fields included, and `agent.py`
+    replays them verbatim on the next hop. Some endpoints attach state to a tool call that the
+    next request must carry back (Gemini's `extra_content.thought_signature`); stripping a call
+    down to id/name/arguments loses it and the second hop is rejected.
     """
 
     kind = "openai"
@@ -268,7 +297,7 @@ class OpenAIConnector(Connector):
         super().__init__(cfg)
         self.base_url = self.base_url or "https://api.openai.com/v1"
         self.reasoning = bool(cfg.get("reasoning", False))
-        if "temperature" not in cfg and not self.reasoning:
+        if not self.temperature_set and not self.reasoning:
             self.temperature = 0
 
     def client(self):
@@ -298,9 +327,15 @@ class OpenAIConnector(Connector):
             kw["extra_body"] = self.extra
         r = self.client().chat.completions.create(**kw)
         m = r.choices[0].message
-        calls = [{"id": c.id, "type": "function",
-                  "function": {"name": c.function.name, "arguments": c.function.arguments}}
-                 for c in (m.tool_calls or [])]
+        calls = []
+        for c in (m.tool_calls or []):
+            d = c.model_dump(exclude_none=True) if hasattr(c, "model_dump") else dict(c)
+            d.setdefault("id", getattr(c, "id", ""))
+            d["type"] = "function"
+            fn = d.get("function") or {}
+            d["function"] = {**fn, "name": fn.get("name", ""),
+                             "arguments": fn.get("arguments") or "{}"}
+            calls.append(d)
         u = getattr(r, "usage", None)
         usage = {"in": getattr(u, "prompt_tokens", 0) or 0,
                  "out": getattr(u, "completion_tokens", 0) or 0} if u else {"in": 0, "out": 0}
@@ -450,7 +485,7 @@ class OllamaConnector(Connector):
         self.base_url = (self.base_url or "http://localhost:11434").rstrip("/")
         self.num_ctx = cfg.get("num_ctx")
         self.keep_alive = cfg.get("keep_alive")
-        if "temperature" not in cfg:
+        if not self.temperature_set:
             self.temperature = 0
         self._seq = 0
         self._seq_lock = threading.Lock()
@@ -466,8 +501,10 @@ class OllamaConnector(Connector):
         return True, ""
 
     def retryable(self, exc):
-        return isinstance(exc, urllib.error.URLError) or (
-            isinstance(exc, urllib.error.HTTPError) and exc.code in (429, 500, 502, 503, 504))
+        # HTTPError is a URLError: test it first, or a 400 would be retried through every wait.
+        if isinstance(exc, urllib.error.HTTPError):
+            return exc.code in (429, 500, 502, 503, 504)
+        return isinstance(exc, urllib.error.URLError)
 
     def _messages(self, messages):
         out = []
@@ -530,6 +567,8 @@ def build(cfg):
     if cls is None:
         raise ValueError(f"{cfg.get('path', cfg['name'])}: unknown connector "
                          f"{cfg['connector']!r}; known: {', '.join(CONNECTORS)}")
+    cfg.setdefault("name", cfg.get("label", "?"))
+    cfg.setdefault("aliases", [])
     return cls(cfg)
 
 

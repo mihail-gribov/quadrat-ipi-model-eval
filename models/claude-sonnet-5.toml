@@ -1,5 +1,5 @@
-# Not shot yet. Direct route through the Messages API; the config is the one the Haiku row's
-# route was verified against (18 episodes, identical to the published ones).
+# Not shot yet. Direct route through the Messages API, the connector the Haiku smoke test
+# verified against the published Haiku episodes.
 connector = "anthropic"
 model = "claude-sonnet-5"
 api_key_env = "ANTHROPIC_API_KEY"
