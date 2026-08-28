@@ -96,8 +96,8 @@ if [ -n "$PARALLEL" ]; then
   # on different accounts do not touch each other at all.
   #
   # Each chain also gets its OWN checkpoint file. Two processes appending to one jsonl will
-  # eventually interleave a long line at a buffer boundary and corrupt it; `run.py` says so in
-  # its header, and the tag is what keeps that from happening. Read them back with a glob:
+  # eventually interleave a long line at a buffer boundary and corrupt it (`matrix.py` refuses
+  # to start on a tag another run holds), and the tag is what keeps that from happening. Read them back with a glob:
   #   python3 report.py --only money --tag 'money7*,<TAG>*' 
   KEYS=$(python3 - $RUNNING <<'PY'
 import sys, connectors

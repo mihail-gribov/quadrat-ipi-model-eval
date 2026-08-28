@@ -20,4 +20,5 @@ jobs:
       # Fetches the 420 listed rows from Hugging Face and verifies the fingerprint.
       - run: python3 corpus.py
       - run: python3 test_world.py
+      - run: python3 test_agent.py
       - run: python3 test_connectors.py

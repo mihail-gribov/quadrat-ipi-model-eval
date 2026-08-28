@@ -1,4 +1,4 @@
-"""Measure ONE model over the money column: every family the corpus has, on the scene that
+"""Measure ONE model over the money slice: every family the corpus has, on the scene that
 carries it.
 
 Four admission rules decide what gets measured, and all four refuse out loud:
@@ -261,6 +261,8 @@ def main():
                 continue
             seen.add((a, s, why))
             print(f"  {a:<20} {s:<10} {why}")
+        if not seen:
+            print("  none")
         return
 
     # Normally resume looks at every checkpoint in the directory: the same episode shot under

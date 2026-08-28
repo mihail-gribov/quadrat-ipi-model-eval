@@ -1,5 +1,5 @@
 #!/bin/sh
-# The money run: the matrix harness, fed the money column.
+# The money run: the matrix harness, fed the money slice.
 #
 # Nothing here changes how an episode runs or how it is graded -- same scene, same manifest,
 # same admission rules, same grader. The only difference is WHICH payloads go in: the ones a

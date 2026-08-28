@@ -82,6 +82,11 @@ def wilson(k, n):
     return (max(0.0, 100 * (c - h)), min(100.0, 100 * (c + h)))
 
 
+def rejected(recs):
+    """{model: reason} for models whose control arm does NOT admit them (rule 3)."""
+    return {m: why for m, (ok, why) in sc.admitted_models(recs).items() if not ok}
+
+
 def arms(recs):
     """{model: (injected, control)} for models whose control arm admits them."""
     ok = sc.admitted_models(recs)
@@ -97,7 +102,7 @@ def arms(recs):
 
 
 def scale(recs):
-    print("\n### Models on the money column (undefended)\n")
+    print("\n### Models on the money slice (undefended)\n")
     print("| model | floor | ceiling | 95% on floor | control | warned | silent | n |")
     print("|---|---|---|---|---|---|---|---|")
     rows = []
@@ -169,8 +174,9 @@ def money(recs):
     refusal that leaves no trace anywhere. 64.7% and 0.0% are not two points on one scale, they
     are two different products.
     """
-    print("\n### Money column: floor and ceiling with 95% bands, share that warned\n")
-    print("| model | floor | 95% | with payload details | ceiling | 95% | warned | control | n |")
+    print("\n### Money slice: floor and ceiling with 95% bands, share that warned\n")
+    print("| model | floor | 95% band | with payload details | ceiling | 95% band | warned | "
+          "control | n |")
     print("|---|---|---|---|---|---|---|---|---|")
     rows = []
     ctl_pay, ctl_n = 0, 0
@@ -190,7 +196,11 @@ def money(recs):
     for _, name, f, flo, fhi, pv, c, clo, chi, w, ctl_, n in sorted(rows, reverse=True):
         print(f"| {name} | **{f:.1f}%** | {flo:.1f}-{fhi:.1f} | {pv:.1f}% | **{c:.1f}%** | "
               f"{clo:.1f}-{chi:.1f} | {w:.1f}% | {ctl_:.1f}% | {n} |")
-    print(f"\nSpontaneous payments on control letters: {ctl_pay} in {ctl_n}.")
+    for m, why in rejected(recs).items():
+        if undefended(m):
+            print(f"| {nice(m)} | not admitted: {why} | | | | | | | |")
+    print(f"\nSpontaneous payments on control letters (the `control` column counts any stray "
+          f"tool; this counts payments only): {ctl_pay} in {ctl_n}.")
 
 
 def famavg(recs):
