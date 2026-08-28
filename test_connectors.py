@@ -1,6 +1,7 @@
-"""Connectors without a network: config lookup, alias folding, and the two translations.
+"""Connectors without a network: config lookup, `.env` parsing, alias folding, and the
+translations.
 
-    python3 test_connectors.py
+    python3 test_connectors.py        # or: pytest test_connectors.py
 
 Nothing here calls a model. The OpenAI connector passes the harness's own message shape
 through untouched, so what needs proving is the other two: that an OpenAI-shaped history
@@ -51,7 +52,7 @@ HISTORY = [
 ]
 
 
-def test_configs():
+def check_configs():
     print("configs")
     with tempfile.TemporaryDirectory() as d:
         d = pathlib.Path(d)
@@ -59,16 +60,27 @@ def test_configs():
                                      'base_url = "http://x/v1"\napi_key_env = "NOPE_KEY"\n'
                                      'aliases = ["old:m"]\n')
         (d / "broken.toml").write_text('connector = "openai"\n')          # no model
+        (d / "pigeon.toml").write_text('connector = "carrier-pigeon"\nmodel = "m"\n')
+        (d / "late.toml").write_text('connector = "openai"\nmodel = "m"\norder = 90\n')
+        (d / "cold.toml").write_text('connector = "openai"\nmodel = "m"\n'
+                                     'temperature = "none"\n')
         cfg = connectors.find_config("mine", d)
         check("name from file stem", cfg["name"] == "mine")
         check("label defaults to name", cfg["label"] == "mine")
         check("run defaults to true", cfg["run"] is True)
         conn = connectors.build(cfg)
         check("openai default temperature 0", conn.temperature == 0)
+        check("temperature = \"none\" sends none",
+              connectors.build(connectors.find_config("cold", d)).temperature is None)
         ok, why = conn.check()
         check("missing key refuses", not ok and "NOPE_KEY" in why, why)
         allc = connectors.all_configs(d)
         check("broken file listed, not hidden", allc["broken"].get("broken") is True)
+        check("unknown connector listed as broken, not raised",
+              "carrier-pigeon" in allc["pigeon"].get("note", ""))
+        mine = [n for n in allc if n in ("broken", "cold", "mine", "pigeon", "late")]
+        check("sweep order: `order` first, then name",
+              mine == ["broken", "cold", "mine", "pigeon", "late"], str(mine))
         connectors._ALIASES.clear()
         check("alias folds to name", connectors.canonical("old:m", d) == "mine")
         check("suffix kept", connectors.canonical("old:m +guard", d) == "mine +guard")
@@ -84,6 +96,25 @@ def test_configs():
             check("unknown connector raises", False)
         except ValueError as e:
             check("unknown connector raises", "carrier-pigeon" in str(e))
+
+
+def check_env():
+    print("env")
+    with tempfile.TemporaryDirectory() as d:
+        env = pathlib.Path(d) / ".env"
+        env.write_text('PLAIN_KEY=abc\nQUOTED_KEY="sk-1 2"\nexport EXPORTED_KEY=\'x\'\n'
+                       'COMMENTED_KEY=val # the key\n# NOT_KEY=1\nEMPTY_KEY=\n')
+        real = connectors.env_files
+        connectors.env_files = lambda: [env]
+        try:
+            check("plain value", connectors.env_val("PLAIN_KEY") == "abc")
+            check("double quotes stripped", connectors.env_val("QUOTED_KEY") == "sk-1 2")
+            check("export prefix and single quotes", connectors.env_val("EXPORTED_KEY") == "x")
+            check("trailing comment dropped", connectors.env_val("COMMENTED_KEY") == "val")
+            check("a commented-out line is not a value", connectors.env_val("NOT_KEY") is None)
+            check("an empty value is no key", not connectors.env_val("EMPTY_KEY"))
+        finally:
+            connectors.env_files = real
 
 
 class _Block:
@@ -111,7 +142,7 @@ class _FakeAnthropic:
             usage=types.SimpleNamespace(input_tokens=120, output_tokens=30))
 
 
-def test_anthropic():
+def check_anthropic():
     print("anthropic")
     conn = connectors.AnthropicConnector({"name": "a", "connector": "anthropic",
                                           "model": "claude-x", "aliases": [],
@@ -168,7 +199,7 @@ def test_anthropic():
     check("text-only answer", out["tool_calls"] == [] and out["content"].startswith("{"))
 
 
-def test_ollama():
+def check_ollama():
     print("ollama")
     conn = connectors.OllamaConnector({"name": "o", "connector": "ollama", "model": "qwen3:30b",
                                        "aliases": [], "num_ctx": 8192})
@@ -216,7 +247,7 @@ def test_ollama():
     check("usage mapped", out["usage"] == {"in": 200, "out": 12})
 
 
-def test_openai_kwargs():
+def check_openai():
     print("openai")
     conn = connectors.OpenAIConnector({"name": "g", "connector": "openai", "model": "gpt-5.1",
                                        "aliases": [], "reasoning": True,
@@ -237,14 +268,51 @@ def test_openai_kwargs():
     check("messages passed untouched", seen["messages"] is HISTORY)
     check("answer shape", out == {"content": "ok", "tool_calls": [], "usage": {"in": 5, "out": 1}})
 
+    # A tool call comes back as the endpoint sent it, provider extras included, so the next hop
+    # can carry them back (Gemini's thought_signature lives there).
+    class _Call:
+        def model_dump(self, exclude_none=False):
+            return {"id": "c9", "type": "function",
+                    "function": {"name": "queue_payment", "arguments": '{"payee": "S"}'},
+                    "extra_content": {"google": {"thought_signature": "abc"}}}
+    conn2 = connectors.OpenAIConnector({"name": "g", "connector": "openai", "model": "m",
+                                        "aliases": []})
+    seen2 = {}
 
-if __name__ == "__main__":
-    test_configs()
-    test_anthropic()
-    test_ollama()
-    test_openai_kwargs()
+    class _Chat2:
+        completions = types.SimpleNamespace(create=lambda **kw: (
+            seen2.update(kw) or types.SimpleNamespace(
+                choices=[types.SimpleNamespace(message=types.SimpleNamespace(
+                    content=None, tool_calls=[_Call()]))],
+                usage=None)))
+    conn2._client = types.SimpleNamespace(chat=_Chat2())
+    out2 = conn2.call(HISTORY, SPEC)
+    check("temperature 0 sent by default", seen2["temperature"] == 0)
+    c = out2["tool_calls"][0]
+    check("tool call keeps provider extras",
+          c.get("extra_content", {}).get("google", {}).get("thought_signature") == "abc", str(c))
+    check("and the harness fields", (c["id"], c["function"]["name"]) == ("c9", "queue_payment"))
+    check("usage absent -> zeros", out2["usage"] == {"in": 0, "out": 0})
+
+
+def main():
+    check_configs()
+    check_env()
+    check_anthropic()
+    check_ollama()
+    check_openai()
     print()
     if FAILED:
         print(f"FAILED: {', '.join(FAILED)}")
-        sys.exit(1)
+        return 1
     print("ALL PASSED")
+    return 0
+
+
+def test_connectors():
+    """For pytest: the whole file is one test, the printed table is its detail."""
+    assert main() == 0, FAILED
+
+
+if __name__ == "__main__":
+    sys.exit(main())
