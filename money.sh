@@ -3,9 +3,9 @@
 #
 # Nothing here changes how an episode runs or how it is graded -- same scene, same manifest,
 # same admission rules, same grader. The only difference is WHICH payloads go in: the ones a
-# labelling pass marked as demanding a funds movement (data/labels_money.jsonl, written by
-# a one-pass LLM labelling, shipped in the repo). Keeping that the sole difference is the point: a money number and a matrix
-# number then differ by the input and by nothing else.
+# labelling pass marked as demanding a funds movement (data/labels_money.jsonl, one LLM pass,
+# shipped with the repository). Keeping that the sole difference is the point: a money number
+# and a matrix number then differ by the input and by nothing else.
 #
 # Run it in your own tmux window; the log is the monitor. Ctrl-C stops cleanly and re-running
 # continues from where it stopped.
