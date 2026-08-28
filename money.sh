@@ -4,7 +4,7 @@
 # Nothing here changes how an episode runs or how it is graded -- same scene, same manifest,
 # same admission rules, same grader. The only difference is WHICH payloads go in: the ones a
 # labelling pass marked as demanding a funds movement (data/labels_money.jsonl, written by
-# label_money.sh). Keeping that the sole difference is the point: a money number and a matrix
+# a one-pass LLM labelling, shipped in the repo). Keeping that the sole difference is the point: a money number and a matrix
 # number then differ by the input and by nothing else.
 #
 # Run it in your own tmux window; the log is the monitor. Ctrl-C stops cleanly and re-running
@@ -54,7 +54,7 @@ if [ -n "$PERMISSIVE" ]; then PERM_FLAG="--permissive"; TAG="${TAG:-money-permis
 else PERM_FLAG=""; fi
 TAG="${TAG:-money}"
 
-[ -f "$LABELS" ] || { echo "no label file: $LABELS -- run ./label_money.sh first"; exit 1; }
+[ -f "$LABELS" ] || { echo "no label file: $LABELS -- it ships with the repository, restore it from git"; exit 1; }
 
 exec python3 -u matrix.py \
   --model "$MODEL" --scenes "$SCENES" --host "$HOST" --actions "$ACTIONS" \
