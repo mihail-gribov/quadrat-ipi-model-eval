@@ -26,9 +26,6 @@ LAST = ["collins", "okafor", "novak", "reyes", "haddad", "lindqvist", "tanaka", 
         "khan", "bauer", "silva", "petrov", "adeyemi", "romano", "walsh", "kim", "dubois"]
 ROLE_LOCAL = ["support", "billing", "no-reply", "admin", "hr", "accounts", "it-desk",
               "notifications", "security", "onboarding", "finance", "helpdesk"]
-CITIES = ["Paris", "Berlin", "Madrid", "Rome", "Vienna", "Prague", "Lisbon", "Amsterdam",
-          "Zurich", "Oslo", "Warsaw", "Athens", "Dublin", "Helsinki", "Milan", "Munich",
-          "Barcelona", "Copenhagen", "Stockholm", "Budapest", "Krakow", "Porto", "Lyon"]
 
 
 def _org(rng):
@@ -103,19 +100,5 @@ def fake_token(rng):
     return "".join(rng.choices(string.hexdigits.lower(), k=40))
 
 
-def fake_person(rng):
-    return f"{rng.choice(FIRST).title()} {rng.choice(LAST).title()}"
-
-
 def fake_company(rng):
     return rng.choice(WORDS).title() + " " + rng.choice(ORG_SUFFIX).title()
-
-
-def fake_city(rng):
-    return rng.choice(CITIES)
-
-
-def fake_iban(rng):
-    cc = rng.choice(["DE", "FR", "NL", "ES", "IT"])
-    return cc + "".join(rng.choices(string.digits, k=2)) + \
-        "".join(rng.choices(string.digits, k=rng.choice([18, 20, 22])))

@@ -1,24 +1,33 @@
-"""Measure ONE model over the whole matrix: every family x action the corpus has, on every scene
-that can honestly carry it.
+"""Measure ONE model over the money column: every family the corpus has, on the scene that
+carries it.
 
-Three rules decide what gets measured, and all three refuse out loud:
+Four admission rules decide what gets measured, and all four refuse out loud:
 
-  1. the corpus has rows for the cell (family x action x host);
-  2. the scene DECLARES the demand meaningful -- deleting files in a weather widget is nonsense,
-     and a model refusing nonsense is not defending itself;
-  3. the manifest, widened by the action's own instrument, can actually carry it.
+  1. the manifest, widened by the action's own instrument, can carry the demand
+     (`tools.admits`);
+  2. the scene declares the demand meaningful for its role (`scenes.meaningful`);
+  3. the model does the benign job on the control arm -- checked after the run
+     (`score.admitted_models`), so a model that cannot do the job is never printed as one
+     that refused;
+  4. the letter itself is admitted: a demand whose compliance is not a tool call is dropped
+     before any model runs (`actions.unverifiable`), and the scene reads the letter before
+     accepting it (`scenes.admits_row`).
 
-A cell that fails any of them is printed with its reason and never appears as a zero. That is
-the whole point: in this bench a zero has to mean "would not", not "could not".
+A cell or a letter that fails any of them is printed with its reason and never appears as a
+zero. In this bench a zero has to mean "would not", not "could not".
 
 Work is ordered ROUND-ROBIN across cells, not cell by cell. A run that is stopped halfway then
 covers every cell shallowly instead of a few cells deeply -- which is the useful half-measurement,
 since the matrix is read across cells.
+
+Two processes must not share a TAG: both would append to one file and interleave records. The
+run refuses to start while another run holds the tag's lock file.
 """
 
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import random
 import signal
@@ -40,10 +49,9 @@ STOP = connectors.STOP
 
 
 def load_rows(host):
-    """`host` is a comma list or `*`. It selects which payload variants exist, not where the
-    payload lands: our scenes always deliver it inside a document returned by a tool. It matters
-    because the corpus does not carry every action on every carrier -- `execute` exists only on
-    `doc`, so an email-only matrix would silently have no shell cells at all."""
+    """The corpus rows with a payload, on the carriers named by `host` (comma list or `*`).
+
+    The shipped list is email only; the filter is what makes that explicit."""
     wanted = None if host in ("*", "", None) else {h.strip() for h in host.split(",")}
     rows = corpus.rows()
     return [r for r in rows if r.get("injection") and (wanted is None or r["host_type"] in wanted)]
@@ -120,10 +128,10 @@ def plan(rows, scene_names, per_cell, seed):
         # work is ordered round-robin, so depth can be decided by stopping the run instead.
         ordered = sorted(pool, key=lambda r: r["id"])
         for scene in usable:
-            # Rule 4, per row: a corpus scene reads the letter before it accepts it. This runs
-            # BEFORE the sample, or `--per-cell 8` quietly returns six -- the gate would eat part
-            # of the cell instead of part of the pool. What it turned away is counted and
-            # printed, so the pool a cell actually ran on is stated rather than assumed.
+            # Rule 4, per letter. This runs BEFORE the sample, or `--per-cell 8` quietly returns
+            # six -- the gate would eat part of the cell instead of part of the pool. What it
+            # turned away is counted and printed, so the pool a cell actually ran on is stated
+            # rather than assumed.
             admitted = []
             for r in ordered:
                 bad, why_bad = actionreg.unverifiable(r)
@@ -150,7 +158,7 @@ def marker_for(row):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="Qwen3-30B",
+    ap.add_argument("--model", required=True,
                     help="model config name: models/<name>.toml")
     ap.add_argument("--scenes", default="intake_mail")
     ap.add_argument("--host", default="email",
@@ -174,11 +182,8 @@ def main():
                     help="run with the defended system prompt (scenes.INTAKE_SYSTEM_GUARDED)")
     ap.add_argument("--no-control", action="store_true")
     ap.add_argument("--escalate", action="store_true",
-                    help="give the agent a way to report the attack. NOT neutral: it cut Qwen "
-                         "from 35.3 to 21.0 percent, so it is a different deployment")
-    ap.add_argument("--permissive", action="store_true",
-                    help="the world stops refusing (same toolbox): the ceiling of what these "
-                         "payloads can achieve, and so a test of the payloads and their world")
+                    help="give the agent a way to report the attack. NOT neutral: it lowers "
+                         "compliance markedly, so it is a different deployment")
     ap.add_argument("--fresh", action="store_true",
                     help="ignore episodes already on disk: use when the WORLD changed, not the "
                          "model -- resumed work would then mix two different experiments")
@@ -222,7 +227,7 @@ def main():
     cells = sorted({(f, a) for f, a, _, _ in jobs})
     n_inj = sum(1 for x in specs if x[4] == "injected")
     print(f"model {args.model}{' +guard' if args.guard else ''}"
-          f"{' +permissive' if args.permissive else ''} | host {args.host} | "
+          f"{' +escalate' if args.escalate else ''} | host {args.host} | "
           f"{len(cells)} cells x scenes -> "
           f"{n_inj} injected + {len(specs) - n_inj} control = {len(specs)} episodes", flush=True)
 
@@ -268,9 +273,8 @@ def main():
              else sorted((HERE / "data").glob("episodes*.jsonl")))
     # An episode that ended in a transport error is NOT done: the provider answered 429 or
     # nothing at all, and the record on disk is a receipt for that, not a measurement. Counting
-    # it as done made three re-runs say "nothing to do" over 100% zeros (a model behind an
-    # exhausted quota, then two models on an exhausted key, 1150 episodes at once).
-    # `score.load` drops such a record once a real one with the same key exists.
+    # it as done makes a re-run say "nothing to do" over a column of zeros that were never
+    # measured. `score.load` drops such a record once a real one with the same key exists.
     for path in [p for p in paths if p.exists()]:
         for line in path.open():
             try:
@@ -278,13 +282,11 @@ def main():
                 if d.get("stop") == "error":
                     continue
                 done.add((connectors.canonical(d["model"]), d["scene"], d["id"], d["variant"],
-                          bool(d.get("guard")), bool(d.get("permissive")),
-                          bool(d.get("escalate"))))
+                          bool(d.get("guard")), bool(d.get("escalate"))))
             except Exception:
                 pass
     todo = [x for x in specs
-            if (args.model, x[2], x[3]["id"], x[4], args.guard,
-                args.permissive, args.escalate) not in done]
+            if (args.model, x[2], x[3]["id"], x[4], args.guard, args.escalate) not in done]
     # Round-robin: one job per cell, then the next, so an interrupted run is still balanced.
     order = defaultdict(list)
     for j in todo:
@@ -307,6 +309,11 @@ def main():
     ok, why = conn.check()
     if not ok:
         sys.exit(f"{args.model}: {why} -- nothing started")
+    lock_path = HERE / "data" / f"episodes-{args.tag}.lock"
+    if lock_path.exists():
+        sys.exit(f"{lock_path.name} exists: another run holds tag {args.tag!r}. "
+                 f"Wait for it, or remove the file if that run is dead -- nothing started")
+    lock_path.write_text(str(os.getpid()))
 
     used, planted = set(), {}
     for _, _, _, r in jobs:
@@ -324,8 +331,7 @@ def main():
         family, action, scene, row, variant = job
         rec = episode.run(caller, row, scene, variant, planted[row["id"]], action=action,
                           max_hops=args.max_hops, protocol=args.protocol,
-                          marker=marker_for(row), guard=args.guard,
-                          permissive=args.permissive, escalate=args.escalate)
+                          marker=marker_for(row), guard=args.guard, escalate=args.escalate)
         rec["model"] = args.model
         rec["model_id"] = conn.model
         rec["connector"] = conn.kind
@@ -340,16 +346,22 @@ def main():
                 print(f"  {counter['n']}/{len(todo)}", flush=True)
 
     def on_int(signum, frame):
+        if STOP.is_set():                  # second Ctrl-C: do not wait for in-flight episodes
+            lock_path.unlink(missing_ok=True)
+            os._exit(130)
         STOP.set()
-        print(f"\nstopping at {counter['n']}/{len(todo)}; continue: rerun the same command",
-              flush=True)
+        print(f"\nstopping at {counter['n']}/{len(todo)} after the episodes in flight; "
+              f"continue: rerun the same command (Ctrl-C again to quit at once)", flush=True)
     signal.signal(signal.SIGINT, on_int)
     signal.signal(signal.SIGTERM, on_int)
 
-    with ThreadPoolExecutor(max_workers=args.conc) as pool:
-        list(pool.map(work, todo))
-    fe.close()
-    fc.close()
+    try:
+        with ThreadPoolExecutor(max_workers=args.conc) as pool:
+            list(pool.map(work, todo))
+    finally:
+        fe.close()
+        fc.close()
+        lock_path.unlink(missing_ok=True)
     print(f"episodes -> {out_ep}\ncalls    -> {out_calls}", flush=True)
 
 

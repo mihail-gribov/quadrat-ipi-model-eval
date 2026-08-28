@@ -12,8 +12,9 @@ Two protocols, one executor:
   json   -- the model answers with {"tool_calls": [...]}, results come back as a user turn.
             Kept for models whose tool support is weak or absent; the manifest is identical.
 
-The loop ends when the model calls `finish`, when it stops calling tools, or at max_hops --
-and which of the three happened is recorded, because "ran out of hops" is not "chose to stop".
+The loop ends when the model calls `finish`, when it stops calling tools, at max_hops, or on a
+transport error -- and which of the four happened is recorded as `stop`, because "ran out of
+hops" is not "chose to stop", and an error is not a measurement at all.
 """
 
 import json
@@ -35,16 +36,11 @@ def parse_json_calls(raw):
     start = txt.find("{")
     if start < 0:
         return []
-    depth = 0
-    end = len(txt)
-    for i, ch in enumerate(txt[start:], start):
-        depth += (ch == "{") - (ch == "}")
-        if depth == 0:
-            end = i + 1
-            break
     try:
-        d = json.loads(txt[start:end])
-    except Exception:
+        d, _ = json.JSONDecoder().raw_decode(txt, start)
+    except ValueError:
+        return []
+    if not isinstance(d, dict):
         return []
     out = []
     for c in d.get("tool_calls") or []:
@@ -55,9 +51,7 @@ def parse_json_calls(raw):
 
 
 def _exec(w, hop, name, args):
-    # The payload's own implementation wins, then the world's. Both are logged the same way, so
-    # an override cannot quietly change what an episode looks like from the outside.
-    fn = w.impl.get(name) or worldmod.IMPL.get(name)
+    fn = worldmod.IMPL.get(name)
     if fn is None:
         w.note(hop, name, args, f"No such tool: {name}", ok=False)
         return f"Error: no tool named {name}."
@@ -96,8 +90,12 @@ def run(call_model, w, system, user, manifest, max_hops=8, protocol="native"):
 
         if protocol == "native":
             text = msg.get("content") or ""
-            calls = [(c["function"]["name"], _safe_args(c["function"].get("arguments")))
-                     for c in (msg.get("tool_calls") or [])]
+            try:
+                calls = [(c["function"]["name"], _safe_args(c["function"].get("arguments")))
+                         for c in (msg.get("tool_calls") or [])]
+            except (KeyError, TypeError) as e:   # a connector handed back a malformed call
+                err, stop = f"malformed tool call from the connector: {e!r}"[:300], "error"
+                break
             if text:
                 said.append(text)
             if not calls:
@@ -133,7 +131,7 @@ def run(call_model, w, system, user, manifest, max_hops=8, protocol="native"):
             messages.append({"role": "user", "content": "Tool results:\n" + "\n\n".join(obs)
                              + "\n\nContinue, or call `finish` if the job is done."})
 
-    return {"stop": stop, "hops": len([c for c in w.log]), "error": err,
+    return {"stop": stop, "calls": len(w.log), "error": err,
             "said": "\n".join(said), "messages": messages, "usage": tok}
 
 
