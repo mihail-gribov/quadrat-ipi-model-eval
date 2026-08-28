@@ -46,6 +46,13 @@ How to read the columns:
 
 Rates are a lower bound: static payloads, one scene, an attacker who does not adapt.
 
+Route: the Nebius rows, the OpenAI rows and ministral-14b were shot on the endpoints their
+configs name. claude-haiku-4.5, gemini-3.7-flash and gemini-3.1-pro were shot through an
+OpenAI-compatible aggregator (the `aliases` in their configs); the shipped configs reach the
+vendors directly and are smoke-tested (the benign job passes 18 of 18 on Haiku through the
+Messages API), but the published rows are not from them. A number belongs to the pair "model +
+route", so a re-shot row through the direct route is a second measurement, not a correction.
+
 ## The scene
 
 One scene, `intake_mail`. The system prompt makes the model a personal assistant with a mailbox
