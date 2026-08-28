@@ -14,9 +14,15 @@
 # on disk, never from this log.
 #
 #   ./money_all.sh --status               state per model, starts nothing
+#   ./money_all.sh --plan                 the admission table per model, starts nothing
 #   ./money_all.sh                        run / continue
+#   ./money_all.sh --protocol json        extra arguments go to every money.sh
 #   ONLY="gpt-5.1 gemini-3.7-flash" ./money_all.sh    just these configs (by name or label)
+#   PARALLEL=1 ./money_all.sh             one chain per API key, chains side by side
 #   AGENT_BENCH_MODELS=/path/to/configs ./money_all.sh   another config directory, searched first
+#
+# Order: configs run by their `order` key (default 50), then by name; put a slow or dear model
+# last with `order = 90`. TAG, CTL_PER_CELL, GUARD, ESCALATE, FRESH pass through to money.sh.
 set -e
 cd "$(dirname "$0")"
 
@@ -28,7 +34,6 @@ export CTL_PER_CELL
 export GUARD
 # Passed through for the same reason as GUARD: the sweep does not need to know what it means.
 export FRESH
-export PERMISSIVE
 export ESCALATE
 export AGENT_BENCH_MODELS
 
@@ -54,13 +59,9 @@ for line in out.stdout.splitlines():
 PY
 )
 
-# `|| true` is not decoration: the loop's last command is the SKIP test, and when the list ends
-# on a RUN line it returns 1, which `set -e` reads as a failed pipeline and kills the script --
-# silently, before anything is printed. It only showed up once ONLY= made a RUN line the last one.
 echo "$LIST" | while IFS="$(printf '\t')" read -r kind a b; do
-  [ "$kind" = "SKIP" ] && echo "skipped: $a -- $b"
-  true
-done || true
+  if [ "$kind" = "SKIP" ]; then echo "skipped: $a -- $b"; fi
+done
 
 RUNNING=$(echo "$LIST" | awk -F'\t' '$1=="RUN"{print $2}')
 [ -n "$RUNNING" ] || { echo "nothing to run"; exit 1; }
@@ -69,10 +70,17 @@ RUNNING=$(echo "$LIST" | awk -F'\t' '$1=="RUN"{print $2}')
 # is found after five models have already paid for themselves. `check` calls nothing.
 python3 connectors.py check $RUNNING || { echo "nothing started"; exit 1; }
 
-if [ "$1" = "--status" ] || [ "$1" = "--plan" ]; then
+if [ "$1" = "--status" ]; then
   for m in $RUNNING; do
     echo "=== $m"
-    MODEL="$m" ./money.sh "$1" 2>&1 | sed -n '2p;/done /p'
+    MODEL="$m" ./money.sh --status 2>&1 | sed -n '2p;/done /p'
+  done
+  exit 0
+fi
+if [ "$1" = "--plan" ]; then
+  for m in $RUNNING; do
+    echo "=== $m"
+    MODEL="$m" ./money.sh --plan
   done
   exit 0
 fi
@@ -90,7 +98,7 @@ if [ -n "$PARALLEL" ]; then
   # Each chain also gets its OWN checkpoint file. Two processes appending to one jsonl will
   # eventually interleave a long line at a buffer boundary and corrupt it; `run.py` says so in
   # its header, and the tag is what keeps that from happening. Read them back with a glob:
-  #   python3 score.py --tag 'money*' ...
+  #   python3 report.py --only money --tag 'money7*,<TAG>*' 
   KEYS=$(python3 - $RUNNING <<'PY'
 import sys, connectors
 for n in sys.argv[1:]:
@@ -101,7 +109,7 @@ PY
     (
       for m in $(echo "$KEYS" | awk -v k="$key" '$2==k{print $1}'); do
         echo "[$key] === $m${GUARD:+  [defended prompt]}"
-        MODEL="$m" TAG="${TAG:-money}${GUARD:+-guard}-$key" ./money.sh 2>&1 | sed "s/^/[$key] /" \
+        MODEL="$m" TAG="${TAG:-money}${GUARD:+-guard}-$key" ./money.sh "$@" 2>&1 | sed "s/^/[$key] /" \
           || echo "[$key] !! $m failed or was interrupted -- continuing with the rest"
       done
       echo "[$key] chain done"
@@ -116,7 +124,7 @@ else
     echo "======================================================================"
     echo "  model $n/$total: $m${GUARD:+  [defended prompt]}"
     echo "======================================================================"
-    MODEL="$m" ./money.sh || echo "  !! $m failed or was interrupted -- continuing with the rest"
+    MODEL="$m" ./money.sh "$@" || echo "  !! $m failed or was interrupted -- continuing with the rest"
   done
 fi
 
