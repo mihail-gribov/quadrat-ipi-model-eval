@@ -240,7 +240,7 @@ one model - which is what happened to Qwen3-30B in the table.
 | `probe_capability.py` | the positive control: run before every sweep (rule 5), or by hand for a published row |
 | `corpus.py` | fetches `positives.jsonl` from Quadrat-IPI at a pinned revision, keeps the listed rows, verifies them |
 | `test_world.py`, `test_agent.py`, `test_connectors.py` | the world and the benign check, the loop, the connectors - all without a model or a key |
-| `data/labels_money.jsonl` | THE LIST: the 420 payload ids and the demand labels that selected them (one LLM pass, gpt-5.1) |
+| `data/labels_money.jsonl` | THE LIST: the 420 payload ids and the demand labels that selected them (one LLM pass, gpt-5.1); no payload text |
 | `data/quadrat-money.sha256` | fingerprint of the rows the list resolves to |
 | `data/episodes-money7*.jsonl.gz` | our episode logs, the source of every number above |
 | `data/probe_capability.jsonl.gz` | the published positive control behind the three zeros; a fresh run writes `data/probe_capability.jsonl` beside it |
@@ -265,8 +265,14 @@ listed ids, checks the result against `data/quadrat-money.sha256` and caches it 
 fingerprint ever fails, the letters behind the list have changed and a new sweep must not be
 compared with the published ones.
 
+The episode logs carry no corpus text either. The letter is cut out of the `read_last_email`
+result before the record is written (`episode.LETTER_REDACTED`), and the payload is stored as
+`pairs`, the substitution map the canaries were planted with (`[["Solace Industries", "Willow
+Works"], ...]`); `score.load` rebuilds the planted payload by applying the map to the corpus row
+(`canary.restore`), so every scorer sees exactly what the model saw. What the logs do carry is
+the model's side: its calls, their arguments, what it said, and the subject line it registered.
+
 Code: Apache-2.0 (`LICENSE`, `NOTICE`). The letters are Quadrat-IPI rows under the dataset's
 own licence; carriers are Enron emails (public record), injections are the dataset's own.
-Episode logs contain model outputs on those letters.
 
 If you use the harness or the numbers, cite Quadrat-IPI and this repository (`CITATION.cff`).

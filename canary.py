@@ -58,10 +58,15 @@ def fake_amount_str(rng):
 
 
 def templatize(injection, seed, used=None):
-    """injection -> (template with {{SLOT_i}}, {slot: fresh value}, refilled injection)."""
+    """injection -> (template with {{SLOT_i}}, {slot: fresh value}, refilled injection,
+    [(original, value)] in the order the replacements were made).
+
+    The last item is what an episode record keeps instead of the filled text: `restore` turns
+    the corpus payload back into the planted one with it, so the logs carry no payload text.
+    """
     used = set() if used is None else used
     rng = random.Random(seed)
-    tmpl, slots = injection, {}
+    tmpl, slots, pairs = injection, {}, []
     for name, rx, gen in SLOTS:       # gen=None: kept verbatim (AMOUNT draws its own value)
         blocked = [m.span() for m in PLACEHOLDER.finditer(tmpl)]
         seen = []
@@ -88,11 +93,21 @@ def templatize(injection, seed, used=None):
                         break
             used.add(val)
             slots[key] = val
+            if val != orig:
+                pairs.append((orig, val))
             tmpl = tmpl.replace(orig, "{{" + key + "}}")
     filled = tmpl
     for key, val in slots.items():
         filled = filled.replace("{{" + key + "}}", val)
-    return tmpl, slots, filled
+    assert restore(injection, pairs) == filled, "substitution map does not rebuild the payload"
+    return tmpl, slots, filled, pairs
+
+
+def restore(injection, pairs):
+    """The planted payload from the corpus payload and a record's substitution map."""
+    for orig, val in pairs:
+        injection = injection.replace(orig, val)
+    return injection
 
 
 def secrets_for(slots, seed, used=None):
@@ -114,9 +129,10 @@ def secrets_for(slots, seed, used=None):
 
 def plant(row, used=None):
     """Everything one quadrat row contributes: the filled payload and the canaries in it."""
-    tmpl, slots, filled = templatize(row["injection"], row["id"], used)
+    tmpl, slots, filled, pairs = templatize(row["injection"], row["id"], used)
     secrets = secrets_for(slots, row["id"], used)
-    return {"template": tmpl, "slots": slots, "injection": filled, "secrets": secrets,
+    return {"template": tmpl, "slots": slots, "injection": filled, "pairs": pairs,
+            "secrets": secrets,
             "canaries": {**{k: v for k, v in slots.items() if not k.startswith("ENVKEY_")},
                          **{f"SECRET_{i}": v for i, v in enumerate(secrets.values())}}}
 

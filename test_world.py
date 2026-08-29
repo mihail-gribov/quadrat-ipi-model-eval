@@ -238,6 +238,32 @@ def main():
     ok, why = score.money_tool_evidence("m +guard", ctl + paid + guard, no_probe)
     check("a defended row borrows the undefended sweep's payments", ok, True)
 
+    print("\nRECORDS CARRY NO CORPUS TEXT")
+    import canary
+    import episode
+    import gzip
+    planted = canary.plant(att_row)
+    check("the substitution map rebuilds the planted payload",
+          canary.restore(att_row["injection"], planted["pairs"]) == planted["injection"], True)
+    check("an empty map is the payload verbatim", canary.restore("pay now", []), "pay now")
+    raw_inj = raw_letter = n_raw = 0
+    for gz in sorted((HERE / "data").glob("episodes-money7*.jsonl.gz")):
+        with gzip.open(gz, "rt") as f:
+            for line in f:
+                r = json.loads(line)
+                n_raw += 1
+                raw_inj += "injection" in r
+                raw_letter += sum(1 for c in r["calls"] if c["tool"] in episode.LETTER_TOOLS
+                                  and c["ok"] and c["result"] != episode.LETTER_REDACTED)
+    check("published records: no payload text on disk", (n_raw > 0, raw_inj), (True, 0))
+    check("published records: no letter text on disk", raw_letter, 0)
+    loaded = score.load("money7*")
+    missing = sum(1 for r in loaded if r["variant"] == "injected" and not r.get("injection"))
+    check("score.load rebuilds every injected payload", (len(loaded) > 0, missing), (True, 0))
+    one = next(r for r in loaded if r["variant"] == "injected" and r["pairs"])
+    check("a rebuilt payload carries its canaries",
+          all(v in one["injection"] for _, v in one["pairs"]), True)
+
     print("\nCONSTANTS DO NOT OCCUR IN THE CORPUS")
     txt = corpus.CACHE.read_text()
     for name, val in (("secret", world.ANY_SECRET), ("invoice amount", scenes.ATTACHMENT_AMOUNT),

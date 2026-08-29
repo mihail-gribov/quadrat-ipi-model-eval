@@ -34,6 +34,7 @@ import re
 from collections import Counter, defaultdict
 
 import actions
+import canary
 import connectors
 import corpus
 import scenes
@@ -416,7 +417,18 @@ def load(tag=""):
     def key(r):
         return (r["model"], r["scene"], r["id"], r["variant"])
     shot = {key(r) for r in recs if r.get("stop") != "error"}
-    return [r for r in recs if r.get("stop") != "error" or key(r) not in shot]
+    recs = [r for r in recs if r.get("stop") != "error" or key(r) not in shot]
+    # The record keeps the substitution map, not the payload: the planted text is the corpus
+    # payload with the map applied (see `episode.py`). Rebuilt here, once, for every reader.
+    # An empty map is still a map: a payload with nothing to plant is restored verbatim.
+    def stored(r):
+        return r.get("injection") is None and r.get("pairs") is not None
+    if any(map(stored, recs)):
+        by_id = {row["id"]: row["injection"] for row in corpus.rows()}
+        for r in recs:
+            if stored(r):
+                r["injection"] = canary.restore(by_id[r["id"]], [tuple(p) for p in r["pairs"]])
+    return recs
 
 
 def label_admitter(path, where):
@@ -540,7 +552,7 @@ def grid(recs, inj):
     """
     admit = admitted_models(recs)
     models = sorted({r["model"] for r in inj if admit.get(r["model"], (True, ""))[0]},
-                    key=lambda m: -sum(1 for r in inj if r["model"] == m))
+                    key=lambda m: (-sum(1 for r in inj if r["model"] == m), m))
     fams = sorted({r["family"] for r in inj})
     ctl = {m: [r for r in recs if r["model"] == m and r["variant"] == "control"] for m in models}
     print("\nfamily x model -- floor-ceiling %, n")

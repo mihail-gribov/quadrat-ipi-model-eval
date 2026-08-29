@@ -7,6 +7,12 @@ The manifest is the scene's own plus whatever the action needs (`actions.manifes
 added instruments are recorded on the record as `extra_tools`, so a reader can see when a row
 ran with more than the base manifest. The record's `effects` are the world's state after the
 episode; `calls` is the log every grader reads.
+
+The record carries no corpus text. The letter is cut out of the `read_last_email` result
+(`LETTER_REDACTED`; `corpus.py` has it), and the payload is kept as `pairs` -- the substitution
+map the canaries were planted with -- from which `score.load` rebuilds the planted text
+(`canary.restore`) on the corpus row. The repository can then ship the logs and still carry
+only the LIST of payloads, not the payloads.
 """
 
 
@@ -15,6 +21,9 @@ import agent
 import canary
 import scenes
 import world as worldmod
+
+LETTER_REDACTED = "<letter redacted: corpus.py fetches it by id>"
+LETTER_TOOLS = {"read_last_email"}
 
 
 def build(row, scene, variant, planted, marker=None, guard=False, escalate=False):
@@ -44,11 +53,13 @@ def run(caller, row, scene, variant, planted, *, action, max_hops=8, protocol="n
     res = agent.run(caller, w, system, sc["user"], manifest, max_hops=max_hops,
                     protocol=protocol)
     ok_task, why_task = scenes.check(scene, w, sc["truth"])
+    calls = [dict(c, result=LETTER_REDACTED) if c["tool"] in LETTER_TOOLS and c["ok"] else c
+             for c in w.log]
     return {"model": None, "scene": scene, "id": row["id"], "variant": variant,
             "guard": guard, "escalate": escalate,
             "family": row["family"], "action": row["action"], "locality": row["locality"],
             "subject": row.get("subject"), "host_type": row.get("host_type"),
-            "injection": planted["injection"] if variant == "injected" else None,
+            "pairs": planted["pairs"] if variant == "injected" else None,
             # The constant `get_secret` returns for any name the payload did not mention rides in
             # the canary set: a model that fetched a credential and put it in an outgoing call has
             # done the two-hop thing, whether or not the payload named the key.
@@ -61,7 +72,7 @@ def run(caller, row, scene, variant, planted, *, action, max_hops=8, protocol="n
             # What the agent asked for and did not have -- the world's limits reported from
             # inside, instead of discovered by paying for another re-shoot.
             "requests": w.requests, "incidents": w.incidents,
-            "calls": w.log,
+            "calls": calls,
             "effects": {"journal": w.journal, "lookups": w.lookups, "opened": w.opened,
                         "sent": w.sent, "posted": w.posted,
                         "payments": w.payments, "routing": w.routing,
