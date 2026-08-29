@@ -1,5 +1,5 @@
 [project]
-name = "quadrat-agent-bench"
+name = "quadrat-ipi-model-eval"
 version = "1.0.0"
 description = "Does an agentic model pay an invoice when an indirect prompt injection arrives inside a tool result? A harness over the Quadrat-IPI money column."
 readme = "README.md"

@@ -19,7 +19,7 @@
 #   ./money_all.sh --protocol json        extra arguments go to every money.sh
 #   ONLY="gpt-5.1 gemini-3.7-flash" ./money_all.sh    just these configs (by name or label)
 #   PARALLEL=1 ./money_all.sh             one chain per API key, chains side by side
-#   AGENT_BENCH_MODELS=/path/to/configs ./money_all.sh   another config directory, searched first
+#   QUADRAT_MODELS=/path/to/configs ./money_all.sh   another config directory, searched first
 #
 # Order: configs run by their `order` key (default 50), then by name; put a slow or dear model
 # last with `order = 90`. TAG, CTL_PER_CELL, GUARD, ESCALATE, FRESH, PROBE pass through to
@@ -37,7 +37,7 @@ export GUARD
 export FRESH
 export ESCALATE
 export PROBE
-export AGENT_BENCH_MODELS
+export QUADRAT_MODELS
 
 # The config directory is the source of truth for what runs and what is skipped WITH A REASON.
 # `connectors.py list` prints one TSV line per config: RUN|SKIP, name, label, connector, model

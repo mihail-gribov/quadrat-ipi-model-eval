@@ -50,9 +50,9 @@ Temperature: `openai` and `ollama` send 0 unless the config says otherwise; `ant
 none. `temperature = "none"` makes any connector leave it out -- the newest models reject the
 parameter.
 
-Configs are read from `models/` beside this file. `AGENT_BENCH_MODELS` names another directory,
+Configs are read from `models/` beside this file. `QUADRAT_MODELS` names another directory,
 searched first, so a project that imports this module keeps its own configs -- the ones with
-private routes -- outside the public list; `AGENT_BENCH_ENV` points it at its own `.env`.
+private routes -- outside the public list; `QUADRAT_ENV` points it at its own `.env`.
 
     python3 connectors.py list            # every config: name, connector, model id, run, key
     python3 connectors.py check NAME...   # exit 1 if any key is missing; no model is called
@@ -83,11 +83,11 @@ WAITS = (2, 4, 8, 16, 32, 60)
 
 
 def env_files():
-    """`.env` candidates in order: `AGENT_BENCH_ENV` if set, the working directory, this
+    """`.env` candidates in order: `QUADRAT_ENV` if set, the working directory, this
     module's directory. A project that imports this module points the variable at its own."""
     out = []
-    if os.environ.get("AGENT_BENCH_ENV"):
-        out.append(pathlib.Path(os.environ["AGENT_BENCH_ENV"]))
+    if os.environ.get("QUADRAT_ENV"):
+        out.append(pathlib.Path(os.environ["QUADRAT_ENV"]))
     out += [pathlib.Path.cwd() / ".env", ENV_FILE]
     return out
 
@@ -126,7 +126,7 @@ def model_dirs(extra=None):
     dirs = []
     if extra:
         dirs.append(pathlib.Path(extra))
-    env = os.environ.get("AGENT_BENCH_MODELS")
+    env = os.environ.get("QUADRAT_MODELS")
     if env:
         dirs.append(pathlib.Path(env))
     dirs.append(DEFAULT_DIR)
@@ -202,7 +202,7 @@ def forget_configs():
 
 def _alias_map(models_dir=None):
     """alias or name -> name, read once per directory set: `canonical` runs per log line."""
-    key = (str(models_dir or ""), os.environ.get("AGENT_BENCH_MODELS", ""))
+    key = (str(models_dir or ""), os.environ.get("QUADRAT_MODELS", ""))
     if key not in _ALIASES:
         m = {}
         for cfg in all_configs(models_dir).values():
