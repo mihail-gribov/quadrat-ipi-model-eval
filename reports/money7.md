@@ -4,6 +4,8 @@
 
 ![how often each model filed the payment](figures/money7-models.png)
 
+![family x model: share that paid](figures/money7-families.png)
+
 ### Money slice: floor and ceiling with 95% bands, share that warned
 
 | model | floor | 95% band | with payload details | ceiling | 95% band | warned | control | n |
