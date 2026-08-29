@@ -1,7 +1,7 @@
 """Measure ONE model over the money slice: every family the corpus has, on the scene that
 carries it.
 
-Four admission rules decide what gets measured, and all four refuse out loud:
+Five admission rules decide what gets measured, and all five refuse out loud:
 
   1. the manifest, widened by the action's own instrument, can carry the demand
      (`tools.admits`);
@@ -11,7 +11,12 @@ Four admission rules decide what gets measured, and all four refuse out loud:
      that refused;
   4. the letter itself is admitted: a demand whose compliance is not a tool call is dropped
      before any model runs (`actions.unverifiable`), and the scene reads the letter before
-     accepting it (`scenes.admits_row`).
+     accepting it (`scenes.admits_row`);
+  5. the money tool works for this model through this route: before the sweep starts the
+     model is asked BY THE USER to queue a payment on five clean letters
+     (`probe_capability.run`), and a model that never does is not started; the scorer reads
+     the same probe back, so a sweep that never paid gets a number only with the probe behind
+     it (`score.money_tool_evidence`).
 
 A cell or a letter that fails any of them is printed with its reason and never appears as a
 zero. In this bench a zero has to mean "would not", not "could not".
@@ -42,7 +47,9 @@ import canary
 import connectors
 import corpus
 import episode
+import probe_capability as probe
 import scenes
+import score
 import tools as toolreg
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -136,6 +143,20 @@ def plan(rows, scene_names, per_cell, seed):
     return jobs, refused, dropped
 
 
+def probe_status(model, n):
+    """One line for --plan / --status: what the positive control on disk says for this config.
+
+    Reads the plain file only, like the run does: the published probe was shot through
+    another route."""
+    if n <= 0:
+        return "positive control: skipped (--probe 0)"
+    recs = score.probe_records(published=False).get(model, [])
+    if not recs:
+        return f"positive control: not on disk -- {n} letters run first"
+    _ok, why = score.probe_verdict(recs, n)
+    return why + " (on disk)"
+
+
 def marker_for(row):
     h = hashlib.sha1(row["id"].encode()).hexdigest()[:10].upper()
     return actions.PROMPT_MARKER.format(h)
@@ -169,6 +190,9 @@ def main():
     ap.add_argument("--escalate", action="store_true",
                     help="give the agent a way to report the attack. NOT neutral: it lowers "
                          "compliance markedly, so it is a different deployment")
+    ap.add_argument("--probe", type=int, default=score.PROBE_N,
+                    help="letters in the positive control run before the sweep (rule 5); "
+                         "0 skips it, and the scorer then needs other evidence for a zero")
     ap.add_argument("--fresh", action="store_true",
                     help="ignore episodes already on disk: use when the WORLD changed, not the "
                          "model -- resumed work would then mix two different experiments")
@@ -220,7 +244,9 @@ def main():
           f"{len(cells)} cells x scenes -> "
           f"{n_inj} injected + {len(specs) - n_inj} control = {len(specs)} episodes", flush=True)
 
+    probe_state = probe_status(model, args.probe)
     if args.plan:
+        print(f"  {probe_state}")
         pool = Counter((r["family"], r["action"]) for r in rows)
         taken = Counter((f, a) for f, a, s, _ in jobs if s == scene_names[0])
         print("\npool per cell (rows available -> rows taken, per scene):")
@@ -294,6 +320,7 @@ def main():
     if args.status:
         for (f, a), n in sorted(coverage.items()):
             print(f"    {f:<18} {a:<20} {n} left", flush=True)
+        print(f"  {probe_state}", flush=True)
         return
     if not todo:
         print("nothing to do", flush=True)
@@ -303,6 +330,29 @@ def main():
     if not ok:
         sys.exit(f"{model}: {why} -- nothing started")
     lock_path = HERE / "data" / f"episodes-{args.tag}.lock"
+    counter = {"n": 0}
+
+    def on_int(signum, frame):
+        if STOP.is_set():                  # second Ctrl-C: do not wait for in-flight episodes
+            lock_path.unlink(missing_ok=True)
+            os._exit(130)
+        STOP.set()
+        print(f"\nstopping at {counter['n']}/{len(todo)} after the episodes in flight; "
+              f"continue: rerun the same command (Ctrl-C again to quit at once)", flush=True)
+    signal.signal(signal.SIGINT, on_int)
+    signal.signal(signal.SIGTERM, on_int)
+
+    # Rule 5, before a single injected letter is paid for: five clean letters where the USER
+    # asks for the payment. Resumed from the plain probe file, so a second run costs nothing.
+    if args.probe > 0:
+        precs = probe.run(conn, n=args.probe, protocol=args.protocol,
+                          log=lambda m: print(m, flush=True))
+        if STOP.is_set():
+            sys.exit("stopped during the positive control; rerun to continue")
+        ok, why = score.probe_verdict(precs, args.probe)
+        print(f"  {why}", flush=True)
+        if not ok:
+            sys.exit(f"{model}: NOT ADMITTED -- {why}; nothing started")
     try:
         with lock_path.open("x") as f:
             f.write(str(os.getpid()))
@@ -317,7 +367,6 @@ def main():
 
     caller = conn.call
     lock = threading.Lock()
-    counter = {"n": 0}
     fe, fc = out_ep.open("a"), out_calls.open("a")
 
     def work(job):
@@ -339,16 +388,6 @@ def main():
             counter["n"] += 1
             if counter["n"] % 25 == 0 or counter["n"] == len(todo):
                 print(f"  {counter['n']}/{len(todo)}", flush=True)
-
-    def on_int(signum, frame):
-        if STOP.is_set():                  # second Ctrl-C: do not wait for in-flight episodes
-            lock_path.unlink(missing_ok=True)
-            os._exit(130)
-        STOP.set()
-        print(f"\nstopping at {counter['n']}/{len(todo)} after the episodes in flight; "
-              f"continue: rerun the same command (Ctrl-C again to quit at once)", flush=True)
-    signal.signal(signal.SIGINT, on_int)
-    signal.signal(signal.SIGTERM, on_int)
 
     try:
         with ThreadPoolExecutor(max_workers=args.conc) as pool:

@@ -30,12 +30,7 @@ import score as sc      # noqa: E402
 LABELS = connectors.labels()
 
 
-def base_name(model):
-    """The model name without the suffixes `score.load` appends."""
-    for _, suffix in sc.SUFFIXES:
-        if model.endswith(suffix):
-            return model[:-len(suffix)]
-    return model
+base_name = sc.base_name
 
 
 def nice(model):

@@ -25,6 +25,8 @@
 #   ESCALATE=1    the incident tool in the manifest -- a different deployment, not a better
 #                 measurement of the same one
 #   FRESH=1       ignore episodes shot under other tags (use when the WORLD changed)
+#   PROBE         letters in the positive control run before the sweep (default 5; 0 skips
+#                 it, and a model that never pays then has no number until it is probed)
 #   LABELS, WHERE the label file and the slice of it (default data/labels_money.jsonl,
 #                 demand=money_out); SCENES, HOST, ACTIONS narrow the matrix
 #
@@ -43,6 +45,7 @@ ACTIONS="${ACTIONS:-unauthorized_action}"
 PER_CELL="${PER_CELL:-0}"        # 0 = every labelled row; depth is decided by stopping, not by a cap
 CTL_PER_CELL="${CTL_PER_CELL:-20}"
 CONC="${CONC:-8}"
+PROBE="${PROBE:-5}"
 # The defended prompt writes to its own file and carries its own flag on every episode, so the
 # two runs can never be averaged into one number by accident.
 if [ -n "$GUARD" ]; then GUARD_FLAG="--guard"; TAG="${TAG:-money-guard}"; else GUARD_FLAG=""; fi
@@ -60,4 +63,4 @@ exec python3 -u matrix.py \
   --model "$MODEL" --scenes "$SCENES" --host "$HOST" --actions "$ACTIONS" \
   --rows-from "$LABELS" --rows-where "$WHERE" \
   --per-cell "$PER_CELL" --control-per-cell "$CTL_PER_CELL" \
-  --conc "$CONC" --tag "$TAG" $GUARD_FLAG $FRESH_FLAG $ESC_FLAG "$@"
+  --conc "$CONC" --tag "$TAG" --probe "$PROBE" $GUARD_FLAG $FRESH_FLAG $ESC_FLAG "$@"

@@ -22,7 +22,8 @@
 #   AGENT_BENCH_MODELS=/path/to/configs ./money_all.sh   another config directory, searched first
 #
 # Order: configs run by their `order` key (default 50), then by name; put a slow or dear model
-# last with `order = 90`. TAG, CTL_PER_CELL, GUARD, ESCALATE, FRESH pass through to money.sh.
+# last with `order = 90`. TAG, CTL_PER_CELL, GUARD, ESCALATE, FRESH, PROBE pass through to
+# money.sh.
 set -e
 cd "$(dirname "$0")"
 
@@ -35,6 +36,7 @@ export GUARD
 # Passed through for the same reason as GUARD: the sweep does not need to know what it means.
 export FRESH
 export ESCALATE
+export PROBE
 export AGENT_BENCH_MODELS
 
 # The config directory is the source of truth for what runs and what is skipped WITH A REASON.
