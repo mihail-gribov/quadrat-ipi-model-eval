@@ -4,7 +4,7 @@ title: "Quadrat-IPI model eval"
 type: software
 authors:
   - family-names: Gribov
-    given-names: Mihail
+    given-names: Mikhail
 license: Apache-2.0
 repository-code: "https://github.com/mihail-gribov/quadrat-ipi-model-eval"
 date-released: 2026-08-28
