@@ -1,0 +1,14 @@
+# The sixth line, first config on it. Listed on the key since 2026-08-27.
+#
+# Not the `openai` connector: this model always reasons (`reasoning_effort` has no `none`),
+# and OpenAI refuses function tools together with reasoning on chat completions, naming
+# /v1/responses as the route. Checked against the endpoint, both refusals are explicit.
+connector = "responses"
+model = "gpt-6-astra"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+label = "gpt-6-astra"
+aliases = ["oai:gpt-6-astra"]
+run = true
+# Rejects any temperature but its default.
+temperature = "none"

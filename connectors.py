@@ -18,11 +18,13 @@ A run names the config, not the model: `MODEL=gpt-4o-mini ./money.sh` reads
 `models/gpt-4o-mini.toml`. Episodes record the config name as `model`, plus `model_id` and
 `connector`, so a log always says what was called and how.
 
-Three connectors, three wire formats:
+Four connectors, four wire formats:
 
     openai     -- OpenAI chat completions with tools. Also every OpenAI-compatible endpoint:
                   Nebius, Mistral, Google's compatibility surface, aggregators, and a vLLM /
                   TGI / llama.cpp / Ollama server on your own machine (`base_url`).
+    responses  -- OpenAI's Responses API, for models that refuse function tools on chat
+                  completions because they always reason (the sixth line does).
     anthropic  -- the Messages API, through the `anthropic` SDK. Tool calls and results are
                   translated to and from content blocks; thinking blocks are replayed verbatim.
     ollama     -- Ollama's native `/api/chat`. Its OpenAI shim works too (`openai` with
@@ -476,6 +478,142 @@ class AnthropicConnector(Connector):
         return {"content": "\n".join(text), "tool_calls": calls, "usage": usage}
 
 
+class ResponsesConnector(Connector):
+    """OpenAI's Responses API, for models that refuse tools on chat completions.
+
+    The sixth line is the reason this exists: `gpt-6-astra` always reasons (its
+    `reasoning_effort` has no `none`), and OpenAI rejects function tools together with
+    reasoning on `/v1/chat/completions`, naming `/v1/responses` as the route. Nothing about
+    the episode changes -- same scene, same manifest, same grader -- only the wire.
+
+    Translation. The harness speaks OpenAI chat shapes, so each request converts: system
+    messages become `instructions`, an assistant tool call becomes a `function_call` item, a
+    tool result becomes `function_call_output`, and the reply's `function_call` items become
+    tool calls again.
+
+    Reasoning items. A reasoning model returns its thinking as items of its own, and the next
+    request must carry them back beside the call they preceded or the endpoint rejects it. The
+    harness keeps no such field, so the connector remembers the raw items of every turn it
+    returned, keyed by the call ids in that turn, and replays them -- the same device the
+    Anthropic connector uses for thinking blocks. Nothing is stored on the provider's side
+    (`store = false`), so the thinking comes back encrypted and goes back verbatim.
+
+    Extra keys are passed as-is: `[extra] reasoning = {effort = "low"}`, `store = true`.
+    """
+
+    kind = "responses"
+
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.key_env = cfg.get("api_key_env", "OPENAI_API_KEY")
+        self.base_url = self.base_url or "https://api.openai.com/v1"
+        self.store = bool(self.extra.pop("store", False))
+        self._raw = collections.OrderedDict()      # tool_call id -> raw output items
+        self._raw_lock = threading.Lock()
+
+    def client(self):
+        if self._client is None:
+            from openai import OpenAI
+            self._client = OpenAI(base_url=self.base_url, api_key=self.key() or "none",
+                                  timeout=self.timeout)
+        return self._client
+
+    def retryable(self, exc):
+        import openai
+        return isinstance(exc, (openai.RateLimitError, openai.APIConnectionError,
+                                openai.InternalServerError))
+
+    # -- translation ---------------------------------------------------------------------
+    @staticmethod
+    def tools(spec):
+        return [{"type": "function", "name": t["function"]["name"],
+                 "description": t["function"].get("description", ""),
+                 "parameters": t["function"].get("parameters")
+                 or {"type": "object", "properties": {}},
+                 "strict": False}
+                for t in (spec or [])]
+
+    def _remember(self, items, ids):
+        with self._raw_lock:
+            for i in ids:
+                self._raw[i] = items
+            while len(self._raw) > 5000:
+                self._raw.popitem(last=False)
+
+    def _assistant(self, m):
+        """The items for one assistant turn: the raw ones if we still hold them."""
+        calls = m.get("tool_calls") or []
+        if calls:
+            with self._raw_lock:
+                raw = self._raw.get(calls[0].get("id"))
+            if raw is not None:
+                return list(raw)
+        items = []
+        if m.get("content"):
+            items.append({"role": "assistant",
+                          "content": [{"type": "output_text", "text": m["content"]}]})
+        for c in calls:
+            fn = c["function"]
+            items.append({"type": "function_call", "call_id": c["id"],
+                          "name": fn["name"], "arguments": fn.get("arguments") or "{}"})
+        return items
+
+    def translate(self, messages):
+        """(instructions, input items) in Responses API shape."""
+        instructions, items = None, []
+        for m in messages:
+            role = m["role"]
+            if role == "system":
+                instructions = m["content"] if instructions is None else (
+                    instructions + "\n\n" + m["content"])
+            elif role == "user":
+                items.append({"role": "user",
+                              "content": [{"type": "input_text", "text": m["content"]}]})
+            elif role == "assistant":
+                items.extend(self._assistant(m))
+            elif role == "tool":
+                items.append({"type": "function_call_output",
+                              "call_id": m.get("tool_call_id", ""),
+                              "output": m.get("content") or ""})
+        return instructions, items
+
+    def _call(self, messages, spec):
+        instructions, items = self.translate(messages)
+        kw = {"model": self.model, "input": items, "store": self.store,
+              "max_output_tokens": max(self.max_tokens, 4000)}
+        if instructions:
+            kw["instructions"] = instructions
+        if self.temperature is not None:
+            kw["temperature"] = self.temperature
+        if spec:
+            kw["tools"] = self.tools(spec)
+            kw["tool_choice"] = "auto"
+        if not self.store:
+            # Thinking is only returned when it is not kept on the provider's side, and the
+            # next request needs it back: without this the second hop of a tool call fails.
+            kw["include"] = ["reasoning.encrypted_content"]
+        kw.update(self.extra)
+        r = self.client().responses.create(**kw)
+        text, calls, raw = [], [], []
+        for item in (r.output or []):
+            d = item.model_dump(exclude_none=True) if hasattr(item, "model_dump") else dict(item)
+            raw.append(d)
+            if d.get("type") == "function_call":
+                calls.append({"id": d.get("call_id") or d.get("id", ""), "type": "function",
+                              "function": {"name": d.get("name", ""),
+                                           "arguments": d.get("arguments") or "{}"}})
+            elif d.get("type") == "message":
+                for part in d.get("content") or []:
+                    if part.get("type") == "output_text":
+                        text.append(part.get("text") or "")
+        if calls:
+            self._remember(raw, [c["id"] for c in calls])
+        u = getattr(r, "usage", None)
+        usage = {"in": getattr(u, "input_tokens", 0) or 0,
+                 "out": getattr(u, "output_tokens", 0) or 0} if u else {"in": 0, "out": 0}
+        return {"content": "\n".join(text), "tool_calls": calls, "usage": usage}
+
+
 class OllamaConnector(Connector):
     """Ollama's native chat API, for a model on this machine. No key, no SDK: plain HTTP.
 
@@ -565,7 +703,8 @@ class OllamaConnector(Connector):
         return {"content": msg.get("content") or "", "tool_calls": calls, "usage": usage}
 
 
-CONNECTORS = {c.kind: c for c in (OpenAIConnector, AnthropicConnector, OllamaConnector)}
+CONNECTORS = {c.kind: c for c in (OpenAIConnector, ResponsesConnector,
+                                  AnthropicConnector, OllamaConnector)}
 
 
 def build(cfg):
