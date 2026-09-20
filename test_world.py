@@ -247,7 +247,9 @@ def main():
           canary.restore(att_row["injection"], planted["pairs"]) == planted["injection"], True)
     check("an empty map is the payload verbatim", canary.restore("pay now", []), "pay now")
     raw_inj = raw_letter = n_raw = 0
-    for gz in sorted((HERE / "data").glob("episodes-money7*.jsonl.gz")):
+    # Every shipped log, not just the money arm: the alarm sweep goes out of the same door and
+    # has to pass the same door check.
+    for gz in sorted((HERE / "data").glob("episodes-*.jsonl.gz")):
         with gzip.open(gz, "rt") as f:
             for line in f:
                 r = json.loads(line)

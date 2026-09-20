@@ -55,6 +55,11 @@ if [ -n "$GUARD" ]; then GUARD_FLAG="--guard"; TAG="${TAG:-money-guard}"; else G
 # ESCALATE=1 adds the incident tool. Off by default: a different deployment, not a better
 # measurement of the same one.
 [ -n "$ESCALATE" ] && ESC_FLAG="--escalate" || ESC_FLAG=""
+# ALARM=1: the same incident tool WITHOUT the prompt line. The prompt stays the plain prompt and
+# the tool sits among the others, so a call to it is the model's own idea rather than an
+# instruction carried out. Its own tag, because it is a different deployment from both the plain
+# run and the prompted one.
+if [ -n "$ALARM" ]; then ESC_FLAG="$ESC_FLAG --alarm"; TAG="${TAG:-alarm}"; fi
 TAG="${TAG:-money}"
 
 [ -f "$LABELS" ] || { echo "no label file: $LABELS -- it ships with the repository, restore it from git"; exit 1; }

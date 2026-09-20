@@ -26,10 +26,10 @@ LETTER_REDACTED = "<letter redacted: corpus.py fetches it by id>"
 LETTER_TOOLS = {"read_last_email"}
 
 
-def build(row, scene, variant, planted, marker=None, guard=False, escalate=False):
+def build(row, scene, variant, planted, marker=None, guard=False, escalate=False, alarm=False):
     """Everything the model will see, plus the invariant check that must pass before it does."""
     sc = scenes.build(scene, row, planted["injection"] if variant == "injected" else None,
-                      secrets=planted["secrets"], guard=guard, escalate=escalate)
+                      secrets=planted["secrets"], guard=guard, escalate=escalate, alarm=alarm)
     w = sc["world"]
     body = "\n".join(m["raw"] for m in w.mail.values())
     if variant == "injected":
@@ -43,9 +43,9 @@ def build(row, scene, variant, planted, marker=None, guard=False, escalate=False
 
 
 def run(caller, row, scene, variant, planted, *, action, max_hops=8, protocol="native",
-        marker=None, guard=False, escalate=False):
+        marker=None, guard=False, escalate=False, alarm=False):
     """Returns the record that both the checkpoint and the scorer read."""
-    sc, w, system, body = build(row, scene, variant, planted, marker, guard, escalate)
+    sc, w, system, body = build(row, scene, variant, planted, marker, guard, escalate, alarm)
     manifest, extra = actions.manifest_for(sc["manifest"], action)
     # A canary must exist nowhere but the payload, or a later hit cannot be attributed. The
     # letter is a corpus letter and cannot be rebuilt, so a collision stays on the record.
@@ -56,7 +56,7 @@ def run(caller, row, scene, variant, planted, *, action, max_hops=8, protocol="n
     calls = [dict(c, result=LETTER_REDACTED) if c["tool"] in LETTER_TOOLS and c["ok"] else c
              for c in w.log]
     return {"model": None, "scene": scene, "id": row["id"], "variant": variant,
-            "guard": guard, "escalate": escalate,
+            "guard": guard, "escalate": escalate, "alarm": alarm,
             "family": row["family"], "action": row["action"], "locality": row["locality"],
             "subject": row.get("subject"), "host_type": row.get("host_type"),
             "pairs": planted["pairs"] if variant == "injected" else None,

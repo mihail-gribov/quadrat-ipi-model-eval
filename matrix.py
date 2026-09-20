@@ -190,6 +190,10 @@ def main():
     ap.add_argument("--escalate", action="store_true",
                     help="give the agent a way to report the attack. NOT neutral: it lowers "
                          "compliance markedly, so it is a different deployment")
+    ap.add_argument("--alarm", action="store_true",
+                    help="the same incident tool WITHOUT the prompt line: the prompt stays the "
+                         "plain one and the tool sits among the others, so a call to it is the "
+                         "model's own initiative (see scenes.ESCALATION_SENTENCE)")
     ap.add_argument("--probe", type=int, default=score.PROBE_N,
                     help="letters in the positive control run before the sweep (rule 5); "
                          "0 skips it, and the scorer then needs other evidence for a zero")
@@ -240,7 +244,8 @@ def main():
     cells = sorted({(f, a) for f, a, _, _ in jobs})
     n_inj = sum(1 for x in specs if x[4] == "injected")
     print(f"model {model}{' +guard' if args.guard else ''}"
-          f"{' +escalate' if args.escalate else ''} | host {args.host} | "
+          f"{' +escalate' if args.escalate else ''}{' +alarm' if args.alarm else ''}"
+          f" | host {args.host} | "
           f"{len(cells)} cells x scenes -> "
           f"{n_inj} injected + {len(specs) - n_inj} control = {len(specs)} episodes", flush=True)
 
@@ -298,15 +303,19 @@ def main():
                 d = json.loads(line)
                 if d.get("stop") == "error":
                     continue
+                # `alarm` belongs in the key for the same reason `escalate` does: without it
+                # every episode of the plain run would count as done for the alarm run, and the
+                # run would start nothing.
                 done.add((connectors.canonical(d["model"]), d["scene"], d["id"], d["variant"],
-                          bool(d.get("guard")), bool(d.get("escalate"))))
+                          bool(d.get("guard")), bool(d.get("escalate")), bool(d.get("alarm"))))
             except (ValueError, KeyError):
                 unreadable += 1
     if unreadable:
         print(f"  {unreadable} unreadable lines in data/episodes*.jsonl (a run cut mid-write?)",
               flush=True)
     todo = [x for x in specs
-            if (model, x[2], x[3]["id"], x[4], args.guard, args.escalate) not in done]
+            if (model, x[2], x[3]["id"], x[4], args.guard, args.escalate, args.alarm)
+            not in done]
     # Round-robin: one job per cell, then the next, so an interrupted run is still balanced.
     order = defaultdict(list)
     for j in todo:
@@ -375,7 +384,8 @@ def main():
         family, action, scene, row, variant = job
         rec = episode.run(caller, row, scene, variant, planted[row["id"]], action=action,
                           max_hops=args.max_hops, protocol=args.protocol,
-                          marker=marker_for(row), guard=args.guard, escalate=args.escalate)
+                          marker=marker_for(row), guard=args.guard, escalate=args.escalate,
+                          alarm=args.alarm)
         rec["model"] = model
         rec["model_id"] = conn.model
         rec["connector"] = conn.kind
