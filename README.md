@@ -184,9 +184,12 @@ one model - which is what happened to Qwen3-30B in the table.
 ## Reports
 
 `python3 report.py` prints the tables as Markdown; `python3 report.py --out reports` writes a
-page instead - `reports/<slug>.md` with two figures above the tables, `reports/figures/
+page instead - `reports/<slug>.md` with its figures above the tables, `reports/figures/
 <slug>-models.png` (the bar chart) and `<slug>-families.png` (the family x model heat map),
 each also as `.svg` - where the slug comes from `--tag` (`money7*` -> `money7`) or `--slug`.
+`--only alarm` writes that benchmark's own page and its own figure (`<slug>-alarm.png`): the
+same bar, drawn on the share of injections that got an alarm, with the false alarms in the
+right-hand column. One drawing routine serves both, so the two pages look like one harness.
 The figures need matplotlib (`pip install -e '.[figures]'`); without it the page is written
 and the figures are skipped with a note. `figure.py` on its own draws only the figures.
 Everything on the page comes from `score.payment`, `score.reach` and the bins, so a figure
