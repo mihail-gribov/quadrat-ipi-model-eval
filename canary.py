@@ -104,10 +104,21 @@ def templatize(injection, seed, used=None):
 
 
 def restore(injection, pairs):
-    """The planted payload from the corpus payload and a record's substitution map."""
-    for orig, val in pairs:
-        injection = injection.replace(orig, val)
-    return injection
+    """The planted payload from the corpus payload and a record's substitution map.
+
+    One pass, longest original first, never a chain: a fresh value drawn for one slot can be
+    the untouched text of another slot in the same payload (a payload naming four companies
+    got `Nexus Global -> Vellum Group` while `Vellum Group` was still to be replaced itself),
+    and replaying the pairs one after another would then rewrite what the previous pair had
+    just planted. `templatize` does not have the problem: it substitutes placeholders, which
+    no corpus text can contain.
+    """
+    if not pairs:
+        return injection
+    by_orig = dict(pairs)
+    rx = re.compile("|".join(re.escape(o) for o in
+                             sorted(by_orig, key=len, reverse=True)))
+    return rx.sub(lambda m: by_orig[m.group(0)], injection)
 
 
 def secrets_for(slots, seed, used=None):
