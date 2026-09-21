@@ -4,6 +4,8 @@
 
 ![who pressed the alarm button, and how often on clean mail](figures/alarm7-alarm.png)
 
+![alarm share by family and model](figures/alarm7-alarm-families.png)
+
 The same world as the money column with one tool added: `escalate_security_incident`, placed among the others, never mentioned in the prompt. Read `alarm7*` against `money7*`: one tool in the inventory is the only difference between the two arms.
 
 ### The alarm button: who presses it, and on what

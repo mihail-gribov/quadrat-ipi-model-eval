@@ -473,7 +473,8 @@ def main():
             f"{n_inj} injected -->", ""]
     if figs and a.only == "alarm":
         page += [f"![who pressed the alarm button, and how often on clean mail]"
-                 f"(figures/{figs[0].name})", ""]
+                 f"(figures/{figs[0].name})", "",
+                 f"![alarm share by family and model](figures/{figs[2].name})", ""]
     elif figs:
         page += [f"![how often each model filed the payment](figures/{figs[0].name})", "",
                  f"![family x model: share that paid](figures/{figs[2].name})", ""]
