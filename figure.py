@@ -81,7 +81,13 @@ ALARM_FIGURE = {
     # colour has to say so before the caption does.
     "bar": "#2e9e4f",
     "lamp_head": "false alarms on\ninjection-free mail",
-    "lamp": "#c62f26",
+    # No lamp on this column. Nine of twelve values are zero, so the lamps came out white, and
+    # the three tinted ones were too pale to tell apart -- a colour that encodes nothing the
+    # number does not. The number carries the interval instead: a zero is a bound, never a
+    # plus-minus, because a Wilson interval on zero has no lower arm to promise.
+    "lamp": None,
+    "lamp_fmt": lambda r: (f"0% (\u2264 {r[6][1]:.1f}%)" if r[4] == 0
+                           else f"{r[4]:.1f}% [{r[6][0]:.1f}\u2013{r[6][1]:.1f}]"),
 }
 
 
@@ -126,7 +132,7 @@ def alarm_rows_from(recs):
         lo, hi = report.wilson(k, len(inj))
         fp = 100 * sum(1 for r in ctl if r.get("incidents")) / len(ctl)
         rows.append((report.nice(m).replace(" +alarm", ""), 100 * k / len(inj), lo, hi, fp,
-                     len(inj)))
+                     len(inj), report.wilson(sum(1 for r in ctl if r.get("incidents")), len(ctl))))
         ctl_n += len(ctl)
         done.append(100 * sum(1 for r in ctl if r["task_ok"]) / len(ctl))
     rows.sort(key=lambda r: (-r[1], r[4], r[0]))
@@ -213,7 +219,7 @@ def draw(rows, meta, outs, spec=None, foot=None):
     bar_h = 0.52
     ramp = np.linspace(0, 1, 256).reshape(1, -1)
     rgb = matplotlib.colors.to_rgb(spec["bar"])
-    for y, (_name, val, lo, hi, _sus, _n) in zip(ys, rows, strict=True):
+    for y, (_name, val, lo, hi, _sus, _n, *_rest) in zip(ys, rows, strict=True):
         # solid to the low end, then the interval fades out towards the high end
         if lo > 0:
             ax.barh(y, lo, height=bar_h, color=spec["bar"], zorder=3)
@@ -251,15 +257,21 @@ def draw(rows, meta, outs, spec=None, foot=None):
     lamp_s = 95
     lamp_r = (lamp_s ** 0.5 / 72) / fig_w / 2
     lamp_x = (right - lamp_r - ax2_l) / ax2_w * 100
-    green = np.array(matplotlib.colors.to_rgb(spec["lamp"]))
+    green = np.array(matplotlib.colors.to_rgb(spec["lamp"] or "#ffffff"))
     off = np.array(matplotlib.colors.to_rgb("#ffffff"))
     head = fig.text(right, bottom + height * (n - 0.35 + 0.6) / (n + 0.5),
                     spec["lamp_head"], fontsize=9, color=MUTED, va="center",
                     ha="right", linespacing=1.4)
     left = head.get_window_extent(renderer).x0 / (fig_w * dpi)
     num_x = (left - ax2_l) / ax2_w * 100 + 2.5
+    fmt = spec.get("lamp_fmt") or (lambda r: f"{r[4]:.1f}%")
     for y, r in zip(ys, rows, strict=True):
-        ax2.text(num_x, y, f"{r[4]:.1f}%", fontsize=9.5, color=MUTED, va="center", ha="left")
+        if spec["lamp"] is None:
+            # Numbers alone, right-aligned to the heading's own edge.
+            ax2.text((right - ax2_l) / ax2_w * 100, y, fmt(r), fontsize=9.5, color=MUTED,
+                     va="center", ha="right")
+            continue
+        ax2.text(num_x, y, fmt(r), fontsize=9.5, color=MUTED, va="center", ha="left")
         # square root, not linear: 3% would be invisible next to 0%, and the point of the lamp
         # is "this one says something at all". 0 stays white, 100 stays green.
         k = (r[4] / 100.0) ** 0.5
