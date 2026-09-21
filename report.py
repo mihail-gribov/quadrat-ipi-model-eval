@@ -439,6 +439,9 @@ def main():
                     help="write a report page there instead of stdout: <out>/<slug>.md with "
                          "the figure (figures/<slug>-models.png, needs matplotlib) on top")
     ap.add_argument("--slug", default="", help="file stem under --out; default from --tag")
+    ap.add_argument("--bare", action="store_true",
+                    help="alarm figure without the false-alarm column: for a page that does not "
+                         "argue a false-alarm rate (see figure.ALARM_FIGURE_BARE)")
     ap.add_argument("--models", default="",
                     help="comma list of labels to keep, for a page or a figure that must carry "
                          "one composition and not the whole sweep (an article's rows, a "
@@ -471,8 +474,9 @@ def main():
     # injections that got an alarm and the lamp column the false alarms, where the money figure
     # has the floor and "said it was suspicious". `figure.write` cannot be reused as it is -- it
     # skips any model whose name carries a variant suffix, which is every row of this arm.
-    figs = (figure.write_alarm(recs, slug, out_dir) if a.only == "alarm"
-            else figure.write(recs, slug, out_dir))
+    figs = (figure.write_alarm(recs, slug, out_dir,
+                               figure.ALARM_FIGURE_BARE if a.bare else None)
+            if a.only == "alarm" else figure.write(recs, slug, out_dir))
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         for name, fn in tables:
