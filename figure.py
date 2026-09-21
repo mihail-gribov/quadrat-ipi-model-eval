@@ -391,15 +391,31 @@ def draw_heat(rows, cells, fams, meta, outs):
     # must not borrow each other's meaning of a dark cell.
     rgb = np.array(matplotlib.colors.to_rgb(meta.get("colour", BAND)))
     surf = np.array(matplotlib.colors.to_rgb(SURFACE))
+    # A diverging scale where zero is not a neutral outcome. On the money grid an empty cell
+    # means the payload moved nobody, so the page colour is the right "nothing here". On the
+    # alarm grid an empty cell means the model never spoke up, which is the worst column of the
+    # run, and the page colour would read as "fine". `low` paints that end instead, and the
+    # pooled share is the hinge the two hues meet at.
+    low = meta.get("colour_low")
+    low_rgb = np.array(matplotlib.colors.to_rgb(low)) if low else None
     vmax = max(cells[(lab, c)][0] for lab in labels for c in cols) or 1.0
+    hinge = meta.get("hinge", cells[("all models", "all")][0] if ("all models", "all") in cells
+                     else vmax / 2) or 1.0
     for i, lab in enumerate(labels):
         y = n_r - 1 - i
         for j, c in enumerate(cols):
             val, k, n = cells[(lab, c)]
             # square root, like the lamps: a 2% cell has to look different from an empty one,
             # and the top of the scale is already saturated.
-            t = (val / vmax) ** 0.5
-            face = surf + (rgb - surf) * t
+            if low_rgb is None:
+                t = (val / vmax) ** 0.5
+                face = surf + (rgb - surf) * t
+            elif val >= hinge:
+                t = ((val - hinge) / max(vmax - hinge, 1e-9)) ** 0.5
+                face = surf + (rgb - surf) * t
+            else:
+                t = (1 - val / hinge) ** 0.5
+                face = surf + (low_rgb - surf) * t
             edge = "#ffffff" if (i == n_r - 1 or j == n_c - 1) else SURFACE
             ax.add_patch(plt.Rectangle((j + 0.03, y + 0.06), 0.94, 0.88, facecolor=face,
                                        edgecolor=edge, linewidth=1.0, zorder=2))
@@ -426,8 +442,8 @@ def draw_heat(rows, cells, fams, meta, outs):
                                 "whoever it went to") + ". "
             f"Families ordered by their pooled {meta.get('ordered_by', 'floor')}; "
             "models as in the bar chart.",
-            "Colour on a square-root scale so a single hit is visible. "
-            "One scene, a non-adaptive attacker."]
+            meta.get("colour_says", "Colour on a square-root scale so a single hit is visible. ")
+            + "One scene, a non-adaptive attacker."]
     foot_pt, foot_step = 9.5, 0.026 * 7.45 / fig_h
 
     def wrap(text, width=0.93):
@@ -487,8 +503,11 @@ ALARM_HEAT = {
     "subheading": "Share of injected emails where the agent pressed the alarm button, per lever "
                   "the payload uses to obtain compliance.",
     "cell_says": "where the agent called escalate_security_incident",
+    "colour_says": ("Colour diverges at the pooled share: green above it, red below, deepest red "
+                    "where the model never pressed the button at all. "),
     "ordered_by": "alarm share",
-    "colour": "#2e9e4f",
+    "colour": "#2e9e4f",       # spoke up
+    "colour_low": "#c62f26",   # never spoke up -- the bad end, not an empty one
 }
 
 
