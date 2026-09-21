@@ -375,6 +375,12 @@ class AnthropicConnector(Connector):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.key_env = cfg.get("api_key_env", "ANTHROPIC_API_KEY")
+        # Caching is OFF unless asked for, and that is not a performance default -- it is a
+        # comparability one. Turning it on splits the system prompt into two blocks, which is the
+        # same text but not the same request, and every published row was shot in one block. A
+        # sweep that mixes the two shapes is two measurements in one column. Turn it on for a
+        # whole new sweep under its own tag: `cache = true` in the config, or CACHE=1.
+        self.cache = bool(cfg.get("cache", os.environ.get("CACHE")))
         self._raw = collections.OrderedDict()      # tool_call id -> raw assistant content
         self._raw_lock = threading.Lock()
 
@@ -453,7 +459,7 @@ class AnthropicConnector(Connector):
         system, msgs = self.translate(messages)
         kw = {"model": self.model, "max_tokens": self.max_tokens, "messages": msgs}
         if system:
-            kw["system"] = system
+            kw["system"] = self.system_blocks(system) if self.cache else system
         if self.temperature is not None:
             kw["temperature"] = self.temperature
         if spec:
@@ -474,8 +480,38 @@ class AnthropicConnector(Connector):
             self._remember(raw, [c["id"] for c in calls])
         u = getattr(r, "usage", None)
         usage = {"in": getattr(u, "input_tokens", 0) or 0,
-                 "out": getattr(u, "output_tokens", 0) or 0} if u else {"in": 0, "out": 0}
+                 "out": getattr(u, "output_tokens", 0) or 0,
+                 # Kept apart from `in`: a cache read is billed at a tenth and a cache write at
+                 # a quarter above, so folding them into one number would misprice the sweep and
+                 # hide whether the cache is working at all.
+                 "cache_read": getattr(u, "cache_read_input_tokens", 0) or 0,
+                 "cache_write": getattr(u, "cache_creation_input_tokens", 0) or 0,
+                 } if u else {"in": 0, "out": 0}
         return {"content": "\n".join(text), "tool_calls": calls, "usage": usage}
+
+    @staticmethod
+    def system_blocks(system):
+        """The system prompt as blocks, with one cache breakpoint before the payload marker.
+
+        Off by default; see `self.cache` in `__init__` for why.
+
+        Every hop of every episode resends the same system prompt and the same twenty tool
+        schemas -- measured on one sweep, 61% of an average request. The Messages API caches by
+        prefix in the order tools -> system -> messages, so a single breakpoint at the end of the
+        stable part of the system prompt covers the tools as well, and the cached tokens are read
+        back at a tenth of the price.
+
+        The breakpoint goes BEFORE `episode.MARKER_LINE`, not after: the marker is drawn per
+        payload, so a prompt cached with it inside would be a cache of one episode and would miss
+        on every other. What sits after the breakpoint is sent as an ordinary block.
+        """
+        import episode                      # local: the connector layer stands alone otherwise
+        stable, sep, rest = system.partition(episode.MARKER_LINE)
+        blocks = [{"type": "text", "text": stable,
+                   "cache_control": {"type": "ephemeral"}}]
+        if sep:
+            blocks.append({"type": "text", "text": sep + rest})
+        return blocks
 
 
 class ResponsesConnector(Connector):
@@ -610,8 +646,38 @@ class ResponsesConnector(Connector):
             self._remember(raw, [c["id"] for c in calls])
         u = getattr(r, "usage", None)
         usage = {"in": getattr(u, "input_tokens", 0) or 0,
-                 "out": getattr(u, "output_tokens", 0) or 0} if u else {"in": 0, "out": 0}
+                 "out": getattr(u, "output_tokens", 0) or 0,
+                 # Kept apart from `in`: a cache read is billed at a tenth and a cache write at
+                 # a quarter above, so folding them into one number would misprice the sweep and
+                 # hide whether the cache is working at all.
+                 "cache_read": getattr(u, "cache_read_input_tokens", 0) or 0,
+                 "cache_write": getattr(u, "cache_creation_input_tokens", 0) or 0,
+                 } if u else {"in": 0, "out": 0}
         return {"content": "\n".join(text), "tool_calls": calls, "usage": usage}
+
+    @staticmethod
+    def system_blocks(system):
+        """The system prompt as blocks, with one cache breakpoint before the payload marker.
+
+        Off by default; see `self.cache` in `__init__` for why.
+
+        Every hop of every episode resends the same system prompt and the same twenty tool
+        schemas -- measured on one sweep, 61% of an average request. The Messages API caches by
+        prefix in the order tools -> system -> messages, so a single breakpoint at the end of the
+        stable part of the system prompt covers the tools as well, and the cached tokens are read
+        back at a tenth of the price.
+
+        The breakpoint goes BEFORE `episode.MARKER_LINE`, not after: the marker is drawn per
+        payload, so a prompt cached with it inside would be a cache of one episode and would miss
+        on every other. What sits after the breakpoint is sent as an ordinary block.
+        """
+        import episode                      # local: the connector layer stands alone otherwise
+        stable, sep, rest = system.partition(episode.MARKER_LINE)
+        blocks = [{"type": "text", "text": stable,
+                   "cache_control": {"type": "ephemeral"}}]
+        if sep:
+            blocks.append({"type": "text", "text": sep + rest})
+        return blocks
 
 
 class OllamaConnector(Connector):
