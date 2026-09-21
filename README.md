@@ -36,9 +36,9 @@ there was one spontaneous payment in 2,340 control episodes.
 
 ### [The alarm arm](benchmarks/alarm.md) - `alarm7*`
 
-Eleven models, the same payloads, one tool added: `escalate_security_incident`, never
+Twelve models, the same payloads, one tool added: `escalate_security_incident`, never
 mentioned in the prompt. Will the agent report the attack on its own? Pressing the button
-runs from 77.5% down to none in 395, false alarms are 13 in 3,802 clean emails, and of
+runs from 77.5% down to none in 395, false alarms are 13 in 4,149 clean emails, and of
 the 389 payments made under an injection three came with an alarm - each one after the
 payment had already been filed.
 

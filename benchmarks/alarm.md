@@ -27,10 +27,12 @@ Controls are 40 per cell here rather than 20: at zero false alarms that bounds t
 ## What the run says
 
 **The spread is wide and says little about resistance.** Pressing the button runs from 77.5% of
-the attacks down to none in 395. Three models never made a single payment; one of them reports
-every fifth attack, another is silent in 394 episodes out of 395.
+the attacks down to none in 395. Four models never made a single payment; one of them reports
+every fifth attack, and two never pressed the button at all - one of those, `gpt-6-astra`, spent
+exactly three calls in every episode, injected and clean alike: read the mail, write the journal
+entry, finish. It has nothing to report because it never looked.
 
-**False alarms are rare and mostly not false.** 13 in 3,802 clean emails, from three models.
+**False alarms are rare and mostly not false.** 13 in 4,149 clean emails, from three models.
 Twelve of the thirteen land on real spam that was in the base letters before any payload.
 
 **An alarm almost never accompanies a breach.** Of the 389 payments made under an injection,
@@ -43,7 +45,7 @@ for the rest the change is within noise, in both directions.
 
 ## Tables
 
-Eleven models, 395 injected and 347 control emails each, from the logs in
+Twelve models, 395 injected and 347 control emails each, from the logs in
 `data/episodes-alarm7-*.jsonl.gz`. Tables and figure alike come out of
 `python3 report.py --tag 'money7*,alarm7*' --only alarm --out reports`, which writes
 [reports/alarm7.md](../reports/alarm7.md) and redraws `reports/figures/alarm7-alarm.png`: a
@@ -64,6 +66,7 @@ number here and a number there cannot disagree, because neither is typed by hand
 | gpt-oss-120b +alarm | 0.8% (0.3-2.2) | 0.0% (0.0-1.1) | 395 / 347 | 99.4% |
 | gpt-4o-mini +alarm | 0.3% (0.0-1.4) | 0.0% (0.0-1.1) | 395 / 347 | 100.0% |
 | gemini-3.7-flash +alarm | 0.0% (0.0-1.0) | 0.0% (0.0-1.1) | 395 / 347 | 100.0% |
+| gpt-6-astra +alarm | 0.0% (0.0-1.0) | 0.0% (0.0-1.1) | 395 / 347 | 100.0% |
 
 ### Did the button keep the money in? Same payloads, with and without it
 
@@ -80,6 +83,7 @@ number here and a number there cannot disagree, because neither is typed by hand
 | gpt-oss-120b +alarm | 3.8% (2.3-6.2) | 3.8% (2.3-6.2) | +0.0 | 9 / 9 (of 395) | 1 |
 | gpt-4o-mini +alarm | 42.0% (37.3-46.9) | 40.0% (35.3-44.9) | -2.0 | 14 / 6 (of 395) | 0.12 |
 | gemini-3.7-flash +alarm | 0.0% (0.0-1.0) | 0.0% (0.0-1.0) | +0.0 | 0 / 0 (of 395) | 1 |
+| gpt-6-astra +alarm | 0.0% (0.0-1.1) | 0.0% (0.0-1.0) | +0.0 | 0 / 0 (of 362) | 1 |
 
 ### Alarm and payment in the same episode
 
@@ -96,6 +100,7 @@ number here and a number there cannot disagree, because neither is typed by hand
 | gpt-oss-120b +alarm | 0.0% (0.0-1.0) | 0% (0/15) | 0/3 | 0 / 0 |
 | gpt-4o-mini +alarm | 0.0% (0.0-1.0) | 0% (0/158) | 0/1 | 0 / 0 |
 | gemini-3.7-flash +alarm | 0.0% (0.0-1.0) | - | - | 0 / 0 |
+| gpt-6-astra +alarm | 0.0% (0.0-1.0) | - | - | 0 / 0 |
 
 ## Reproducing it
 
