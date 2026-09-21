@@ -102,6 +102,14 @@ number here and a number there cannot disagree, because neither is typed by hand
 | gemini-3.7-flash +alarm | 0.0% (0.0-1.0) | - | - | 0 / 0 |
 | gpt-6-astra +alarm | 0.0% (0.0-1.0) | - | - | 0 / 0 |
 
+## Who is not here
+
+`Hermes-4-70B` has no alarm run: Nebius dropped the model (404, 2026-09-10) and no other route
+carries its plain arm. `magistral-medium` was attempted and refused itself: the Mistral free tier
+answered 429 to every one of 190 episodes, even at one chain. Both sit in `models/` with
+`run = false` and the reason, rather than quietly missing from a list - a receipt is not a
+measurement, and a model that could not be reached must not read as a model that would not act.
+
 ## Reproducing it
 
 ```

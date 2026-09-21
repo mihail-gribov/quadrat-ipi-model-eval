@@ -4,7 +4,7 @@ base_url = "https://api.mistral.ai/v1"
 api_key_env = "MISTRAL_API_KEY"
 label = "magistral-medium"
 aliases = ["mis:magistral-medium-latest"]
-run = true
-note = "Mistral reasoning flagship; free-tier CONC=1"
+run = false
+note = "not shot: the free tier answered 429 'Rate limit exceeded' to every episode, 190 of 190, even with one chain (2026-09-21); needs a paid tier or another route"
 # Reasoning model: leave temperature out to avoid 400 on unsupported param.
 temperature = "none"
