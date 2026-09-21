@@ -439,8 +439,19 @@ def main():
                     help="write a report page there instead of stdout: <out>/<slug>.md with "
                          "the figure (figures/<slug>-models.png, needs matplotlib) on top")
     ap.add_argument("--slug", default="", help="file stem under --out; default from --tag")
+    ap.add_argument("--models", default="",
+                    help="comma list of labels to keep, for a page or a figure that must carry "
+                         "one composition and not the whole sweep (an article's rows, a "
+                         "head-to-head). Everything else is dropped before any table is counted, "
+                         "so the pooled rows and the figures agree with the models shown.")
     a = ap.parse_args()
     recs = load(a.tag, a.labels, a.labels_where)
+    if a.models:
+        keep = {m.strip() for m in a.models.split(",") if m.strip()}
+        recs = [r for r in recs if base_name(nice(r["model"])) in keep]
+        missing = keep - {base_name(nice(r["model"])) for r in recs}
+        if missing:
+            sys.exit(f"no episodes for: {', '.join(sorted(missing))}")
     n_inj = sum(1 for r in recs if r["variant"] == "injected")
     tables = (("money", money), ("scale", scale), ("bins", bins), ("sensor", sensor),
               ("alarm", alarm), ("famavg", famavg), ("families", families), ("guard", guard))
