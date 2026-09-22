@@ -175,7 +175,10 @@ def check_anthropic():
     check("answer call", out["tool_calls"][0]["function"]["name"] == "queue_payment")
     check("answer args are a JSON string",
           json.loads(out["tool_calls"][0]["function"]["arguments"])["amount"] == "$4,250")
-    check("usage mapped", out["usage"] == {"in": 120, "out": 30})
+    # Cache counters ride along since the caching commit: zero here, since the fake response
+    # carries none, but present, so a sweep can tell "cache off" from "cache never hit".
+    check("usage mapped",
+          out["usage"] == {"in": 120, "out": 30, "cache_read": 0, "cache_write": 0})
 
     # Replay: the harness appends its own copy of the turn; the connector must send back the
     # raw blocks it received, thinking included, or the next request is rejected.

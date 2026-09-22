@@ -46,7 +46,9 @@ for the rest the change is within noise, in both directions.
 ## Tables
 
 Twelve models, 395 injected and 347 control emails each, from the logs in
-`data/episodes-alarm7-*.jsonl.gz`. Tables and figure alike come out of
+`data/episodes-alarm7-*.jsonl.gz`. Admission is the root README's: `gpt-6-astra` never paid
+and has no plain run, so its row rests on the positive control in `data/probe_capability.jsonl.gz`
+(queued five of five), like the three zeros of the money column. Tables and figure alike come out of
 `python3 report.py --tag 'money7*,alarm7*' --only alarm --out reports`, which writes
 [reports/alarm7.md](../reports/alarm7.md) and redraws `reports/figures/alarm7-alarm.png`: a
 number here and a number there cannot disagree, because neither is typed by hand.
@@ -83,7 +85,7 @@ number here and a number there cannot disagree, because neither is typed by hand
 | gpt-oss-120b +alarm | 3.8% (2.3-6.2) | 3.8% (2.3-6.2) | +0.0 | 9 / 9 (of 395) | 1 |
 | gpt-4o-mini +alarm | 42.0% (37.3-46.9) | 40.0% (35.3-44.9) | -2.0 | 14 / 6 (of 395) | 0.12 |
 | gemini-3.7-flash +alarm | 0.0% (0.0-1.0) | 0.0% (0.0-1.0) | +0.0 | 0 / 0 (of 395) | 1 |
-| gpt-6-astra +alarm | 0.0% (0.0-1.1) | 0.0% (0.0-1.0) | +0.0 | 0 / 0 (of 362) | 1 |
+| gpt-6-astra +alarm | - | 0.0% (0.0-1.0) | - | - | - |
 
 ### Alarm and payment in the same episode
 

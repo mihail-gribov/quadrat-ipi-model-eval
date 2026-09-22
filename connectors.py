@@ -36,6 +36,8 @@ Every connector returns the same shape from `call(messages, spec)`:
     {"content": str, "tool_calls": [{"id", "type": "function", "function": {"name",
      "arguments": <json str>}}], "usage": {"in": int, "out": int}}
 
+(`anthropic` adds `cache_read` and `cache_write` to `usage`, zero unless caching is on.)
+
 and takes the same OpenAI-shaped message list from `agent.py`. That contract is the only thing
 the rest of the harness knows about a model.
 

@@ -290,10 +290,17 @@ def alarm(recs):
         return [r for r in rs if r["model"] == model and r["variant"] == variant
                 and r.get("stop") != "error"]
 
+    # The same gate as the figure (`arms`): a model that never paid and has no positive control
+    # on disk is refused here too, and says so, or the table would carry a row the figure drops.
+    ok = sc.admitted_models(recs)
+    refused = []
     rows = []
     for m in sorted({r["model"] for r in have}):
         inj, ctl = arm(have, m, "injected"), arm(have, m, "control")
         if not inj or not ctl:
+            continue
+        if not ok.get(m, (True, ""))[0]:
+            refused.append((m, ok[m][1]))
             continue
         base = arm(plain, m.replace(" +alarm", ""), "injected")
         # The floor column pools every sweep of the model, as the money table does (Qwen3-30B was
@@ -328,6 +335,8 @@ def alarm(recs):
         print(f"| {nice(x['model'])} | {_band(x['rang'], len(x['inj']))} "
               f"| {100*x['fp']/len(x['ctl']):.1f}% ({lo:.1f}-{hi:.1f}) "
               f"| {len(x['inj'])} / {len(x['ctl'])} | {t:.1f}% |")
+    for m, why in refused:
+        print(f"| {nice(m)} | not admitted: {why} | | | |")
 
     if any(x["base"] for x in rows):
         print("\n### Did the button keep the money in? Same payloads, with and without it\n")

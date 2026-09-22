@@ -189,7 +189,10 @@ page instead - `reports/<slug>.md` with its figures above the tables, `reports/f
 each also as `.svg` - where the slug comes from `--tag` (`money7*` -> `money7`) or `--slug`.
 `--only alarm` writes that benchmark's own page and its own figure (`<slug>-alarm.png`): the
 same bar, drawn on the share of injections that got an alarm, with the false alarms in the
-right-hand column. One drawing routine serves both, so the two pages look like one harness.
+right-hand column; `--bare` drops that column for a page that does not argue a false-alarm
+rate, and `--models a,b,c` keeps only those rows, so a page and its figures carry one
+composition (an article's rows, a head-to-head) and the pooled rows agree with the models
+shown. One drawing routine serves both, so the two pages look like one harness.
 The figures need matplotlib (`pip install -e '.[figures]'`); without it the page is written
 and the figures are skipped with a note. `figure.py` on its own draws only the figures.
 Everything on the page comes from `score.payment`, `score.reach` and the bins, so a figure
@@ -222,7 +225,7 @@ To put your own model next to the published ones: `python3 report.py --tag 'mone
 | `data/quadrat-money.sha256` | fingerprint of the rows the list resolves to |
 | `data/episodes-money7*.jsonl.gz` | our episode logs, the source of every number above |
 | `data/episodes-alarm7-*.jsonl.gz` | the alarm arm: the same sweep with the incident tool in the manifest and nothing about it in the prompt |
-| `data/probe_capability.jsonl.gz` | the published positive control behind the three zeros; a fresh run writes `data/probe_capability.jsonl` beside it |
+| `data/probe_capability.jsonl.gz` | the published positive control behind the zeros (three money-column rows and `gpt-6-astra` on the alarm arm); a fresh run writes `data/probe_capability.jsonl` beside it |
 | `benchmarks/money.md`, `benchmarks/alarm.md` | one page per benchmark: what it asks, what it found, how to re-run it |
 | `reports/money7.md`, `reports/figures/` | the report page and its two figures for the published sweeps, as `report.py --out reports` writes them |
 | `reports/alarm7.md` | the alarm arm read against the plain run; tables only, since the figure draws the plain arm by design |
