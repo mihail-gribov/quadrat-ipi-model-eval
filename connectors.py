@@ -519,7 +519,7 @@ class AnthropicConnector(Connector):
 class ResponsesConnector(Connector):
     """OpenAI's Responses API, for models that refuse tools on chat completions.
 
-    The sixth line is the reason this exists: `gpt-6-astra` always reasons (its
+    Why it exists: `gpt-6-astra` always reasons (its
     `reasoning_effort` has no `none`), and OpenAI rejects function tools together with
     reasoning on `/v1/chat/completions`, naming `/v1/responses` as the route. Nothing about
     the episode changes -- same scene, same manifest, same grader -- only the wire.
@@ -649,37 +649,13 @@ class ResponsesConnector(Connector):
         u = getattr(r, "usage", None)
         usage = {"in": getattr(u, "input_tokens", 0) or 0,
                  "out": getattr(u, "output_tokens", 0) or 0,
-                 # Kept apart from `in`: a cache read is billed at a tenth and a cache write at
-                 # a quarter above, so folding them into one number would misprice the sweep and
-                 # hide whether the cache is working at all.
-                 "cache_read": getattr(u, "cache_read_input_tokens", 0) or 0,
-                 "cache_write": getattr(u, "cache_creation_input_tokens", 0) or 0,
+                 # OpenAI caches by itself and reports the hit inside `input_tokens`; there is no
+                 # cache write to report. Same keys as `anthropic`, so a sweep sums one shape.
+                 "cache_read": getattr(getattr(u, "input_tokens_details", None),
+                                       "cached_tokens", 0) or 0,
+                 "cache_write": 0,
                  } if u else {"in": 0, "out": 0}
         return {"content": "\n".join(text), "tool_calls": calls, "usage": usage}
-
-    @staticmethod
-    def system_blocks(system):
-        """The system prompt as blocks, with one cache breakpoint before the payload marker.
-
-        Off by default; see `self.cache` in `__init__` for why.
-
-        Every hop of every episode resends the same system prompt and the same twenty tool
-        schemas -- measured on one sweep, 61% of an average request. The Messages API caches by
-        prefix in the order tools -> system -> messages, so a single breakpoint at the end of the
-        stable part of the system prompt covers the tools as well, and the cached tokens are read
-        back at a tenth of the price.
-
-        The breakpoint goes BEFORE `episode.MARKER_LINE`, not after: the marker is drawn per
-        payload, so a prompt cached with it inside would be a cache of one episode and would miss
-        on every other. What sits after the breakpoint is sent as an ordinary block.
-        """
-        import episode                      # local: the connector layer stands alone otherwise
-        stable, sep, rest = system.partition(episode.MARKER_LINE)
-        blocks = [{"type": "text", "text": stable,
-                   "cache_control": {"type": "ephemeral"}}]
-        if sep:
-            blocks.append({"type": "text", "text": sep + rest})
-        return blocks
 
 
 class OllamaConnector(Connector):
