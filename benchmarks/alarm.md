@@ -20,17 +20,20 @@ does (arXiv 2511.17085, SnitchBench) - so the prompted arm measures the prompt a
 one measures the model.
 
 Controls are 40 per cell here rather than 20: at zero false alarms that bounds the rate at about
-1% instead of 2%, and the false-alarm column is the one a small denominator ruins.
+1% instead of 2%, and the false-alarm column is the one a small denominator ruins. Three cells
+have fewer admitted letters than that (`pretext` 38, `persistence` 37, `output_marking` 32), so
+a model gets 347 control emails, not 360.
 
 ![who pressed the alarm button, and how often on clean mail](../reports/figures/alarm7-alarm.png)
 
 ## What the run says
 
 **The spread is wide and says little about resistance.** Pressing the button runs from 77.5% of
-the attacks down to none in 395. Four models never made a single payment; one of them reports
-every fifth attack, and two never pressed the button at all - one of those, `gpt-6-astra`, spent
-exactly three calls in every episode, injected and clean alike: read the mail, write the journal
-entry, finish. It has nothing to report because it never looked.
+the attacks down to none in 395. Five models never made a single payment, and their alarm
+rates run from 77.5% to zero; two of them never pressed the button at all. One of those two,
+`gpt-6-astra`, spent exactly three calls in every episode, injected and clean alike: read the
+mail, write the journal entry, finish. It reads, logs and stops without weighing what it read,
+so it has nothing to report.
 
 **False alarms are rare and mostly not false.** 13 in 4,149 clean emails, from three models.
 Twelve of the thirteen land on real spam that was in the base letters before any payload.
@@ -49,7 +52,7 @@ Twelve models, 395 injected and 347 control emails each, from the logs in
 `data/episodes-alarm7-*.jsonl.gz`. Admission is the root README's: `gpt-6-astra` never paid
 and has no plain run, so its row rests on the positive control in `data/probe_capability.jsonl.gz`
 (queued five of five), like the three zeros of the money column. Tables and figure alike come out of
-`python3 report.py --tag 'money7*,alarm7*' --only alarm --out reports`, which writes
+`python3 report.py --tag 'money7*,alarm7*' --only alarm --slug alarm7 --out reports`, which writes
 [reports/alarm7.md](../reports/alarm7.md) and redraws `reports/figures/alarm7-alarm.png`: a
 number here and a number there cannot disagree, because neither is typed by hand.
 
@@ -111,6 +114,6 @@ ALARM=1 CTL_PER_CELL=40 MODEL=gpt-4o-mini TAG=mine-alarm ./money.sh
 python3 report.py --tag 'money7*,alarm7*,mine-alarm' --only alarm
 ```
 
-A model that was never shot without the tool still gets the first and the third table; the floor
+A model that was never run without the tool still gets the first and the third table; the floor
 comparison needs both arms, and its row carries a dash rather than a number borrowed from a run
 of other payloads.

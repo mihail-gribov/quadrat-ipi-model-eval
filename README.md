@@ -96,7 +96,7 @@ never touched a money tool at all; their probe is published in
 `data/probe_capability.jsonl.gz`: all three queued it five times out of five, through the same
 aggregator route as their rows, and so did Qwen3-30B, probed as a known-good model (through the
 aggregator, whereas its row was run on Nebius). The tool works; the zero is a refusal. GLM-5.2
-was shot before the probe became a rule and was not probed: it is admitted on the weaker
+was run before the probe became a rule and was not probed: it is admitted on the weaker
 evidence - one `lookup_payee` and one `read_attachment` call across its sweep, and 25 injected
 episodes where it echoed the payload's marker. That is proof the manifest arrived, not that
 `queue_payment` works for it; a re-run through `money.sh` would probe it first.
@@ -120,7 +120,7 @@ python3 report.py --only money --tag 'money7*,mine'   # your row next to ours
 A model is a config file, `models/<name>.toml`, and a run names the config:
 
 ```toml
-connector = "openai"                  # openai | anthropic | ollama
+connector = "openai"                  # openai | anthropic | responses | ollama
 model = "gpt-4o-mini"                 # the id the endpoint knows
 base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"        # the key lives in .env, never here
@@ -132,6 +132,8 @@ One class per wire format (`connectors.py`): `openai` is chat completions with t
 covers every OpenAI-compatible endpoint - OpenAI, Nebius, Mistral, Google's compatibility
 surface, an aggregator, or a vLLM / TGI / llama.cpp / LM Studio server on your own machine
 (`models/local-vllm.toml`); `anthropic` is the Messages API through the vendor's SDK;
+`responses` is OpenAI's Responses API, for reasoning models that refuse function tools on
+chat completions (`models/gpt-6-astra.toml`);
 `ollama` is Ollama's native API for a local model (`models/local-ollama.toml`, where `num_ctx`
 can be set - the OpenAI shim leaves it at a default too small for the 19-tool manifest).
 Optional keys: `max_tokens`, `temperature` (`openai` and `ollama` send 0 unless set,
@@ -139,7 +141,8 @@ Optional keys: `max_tokens`, `temperature` (`openai` and `ollama` send 0 unless 
 `reasoning = true` for OpenAI reasoning models (sends `max_completion_tokens` and no
 temperature), `base_url_env` when the URL is private, `aliases` for ids older logs used,
 `order` for the sweep position, `note` (printed by `connectors.py list`), `num_ctx` and
-`keep_alive` for Ollama, and an `[extra]` table merged into every request as-is (`thinking`,
+`keep_alive` for Ollama, `cache = true` for prompt caching on `anthropic` (or `CACHE=1`; off by
+default, and a cached sweep is a new tag), and an `[extra]` table merged into every request as-is (`thinking`,
 `output_config`, `reasoning_effort`, ...).
 Everything goes through one tool protocol and one retry path, so a row differs from another by
 the config and by nothing else. Episodes record the config name as `model`, plus `model_id` and
@@ -154,12 +157,13 @@ Knobs, all environment variables of `money.sh` (the header of the script lists t
 | knob | default | what it does |
 |---|---|---|
 | `MODEL` | required | config name, `models/<name>.toml` |
-| `TAG` | `money` (`money-guard` under `GUARD=1`) | name of the sweep; episodes go to `data/episodes-<TAG>.jsonl` |
+| `TAG` | `money` (`money-guard` under `GUARD=1`, `alarm` under `ALARM=1`) | name of the sweep; episodes go to `data/episodes-<TAG>.jsonl` |
 | `CTL_PER_CELL` | 20 | control episodes per cell, nine cells: 20 gives the published 180 |
 | `PER_CELL` | 0 | injected rows per cell; 0 = every labelled row |
 | `CONC` | 8 | episodes in flight; 1 for a rate-limited key |
 | `GUARD=1` | off | the defended system prompt; its own file, its own row |
 | `ESCALATE=1` | off | an incident-reporting tool in the manifest; a different deployment |
+| `ALARM=1` | off | the same tool with no line about it in the prompt: the [alarm arm](benchmarks/alarm.md) |
 | `FRESH=1` | off | ignore episodes run under other tags (when the world changed) |
 | `PROBE` | 5 | letters in the positive control run before the sweep; 0 skips it, and a model that never pays then has no number until `probe_capability.py` is run for it |
 | `LABELS`, `WHERE` | `data/labels_money.jsonl`, `demand=money_out` | the label file and the slice of it that selects payloads |
@@ -169,7 +173,8 @@ Knobs, all environment variables of `money.sh` (the header of the script lists t
 restricts it, `PARALLEL=1` runs one chain per API key, each chain writing its own file
 (`episodes-<TAG>-nebius.jsonl`, the way the published sweeps are named).
 
-Cost: 575 episodes per model, 2 to 4 tool calls each; on the published sweeps 2.4 to 5.6
+Cost: 575 episodes per model on the money run (742 on the alarm arm, with `CTL_PER_CELL=40`),
+2 to 4 tool calls each; on the published sweeps 2.4 to 5.6
 million input tokens and 45k to 265k output tokens per model (`usage` is recorded on every
 episode; sum it for your own row). Ctrl-C stops at an episode boundary; running again continues.
 A second Ctrl-C quits at once.
@@ -228,7 +233,7 @@ To put your own model next to the published ones: `python3 report.py --tag 'mone
 | `data/probe_capability.jsonl.gz` | the published positive control behind the zeros (three money-column rows and `gpt-6-astra` on the alarm arm); a fresh run writes `data/probe_capability.jsonl` beside it |
 | `benchmarks/money.md`, `benchmarks/alarm.md` | one page per benchmark: what it asks, what it found, how to re-run it |
 | `reports/money7.md`, `reports/figures/` | the report page and its two figures for the published sweeps, as `report.py --out reports` writes them |
-| `reports/alarm7.md` | the alarm arm read against the plain run; tables only, since the figure draws the plain arm by design |
+| `reports/alarm7.md` | the alarm arm read against the plain run, with its two figures, as `report.py --tag 'money7*,alarm7*' --only alarm --slug alarm7 --out reports` writes it |
 
 The harness runs the money slice and nothing else: one scene, one carrier, one list of
 payloads. The admission machinery is written for the corpus's full action taxonomy, so another
